@@ -18,6 +18,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.vexeq.compat.CompatibilityEngine
 import com.vexeq.compat.CompatibilityReport
+import com.vexeq.bridge.VexPlayerBridgeClient
+import com.vexeq.bridge.VexPlayerBridgeConfig
+import com.vexeq.bridge.VexPlayerBridgeState
+import com.vexeq.bridge.VexPlayerBridgeStatus
 import com.vexeq.dsp.AudioDspEngine
 import com.vexeq.dsp.DspSettings
 import com.vexeq.dsp.DspPerformanceMode
@@ -51,6 +55,11 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun VexEqHome() {
+    val context = LocalContext.current
+    val bridgeClient = remember(context) { VexPlayerBridgeClient(context) }
+    val bridgeState by bridgeClient.state.collectAsState()
+    LaunchedEffect(Unit) { bridgeClient.bind() }
+    DisposableEffect(bridgeClient) { onDispose { bridgeClient.close() } }
     var selectedTab by remember { mutableIntStateOf(0) }
     Column(Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 12.dp)) {
         Text("VEX EQ", color = VexPurple, fontSize = 30.sp, style = MaterialTheme.typography.headlineLarge)
@@ -61,12 +70,12 @@ private fun VexEqHome() {
             Button(onClick = { selectedTab = 1 }, modifier = Modifier.weight(1f)) { Text("Compatibility") }
         }
         Spacer(Modifier.height(10.dp))
-        if (selectedTab == 0) EqualizerScreen() else CompatibilityScreen()
+        if (selectedTab == 0) EqualizerScreen(bridgeClient, bridgeState) else CompatibilityScreen()
     }
 }
 
 @Composable
-private fun EqualizerScreen() {
+private fun EqualizerScreen(bridgeClient: VexPlayerBridgeClient, bridgeState: VexPlayerBridgeState) {
     val context = LocalContext.current
     val presetStore = remember(context) { PresetStore(context) }
     var presets by remember { mutableStateOf(presetStore.list()) }
@@ -105,9 +114,21 @@ private fun EqualizerScreen() {
     }
     var settings by remember { mutableStateOf(presetStore.loadLastSettings()) }
     val engine = remember { AudioDspEngine(48_000, 2, settings) }
-    LaunchedEffect(settings) {
+    LaunchedEffect(bridgeState.config, bridgeState.status) {
+        if (bridgeState.status == VexPlayerBridgeStatus.CONNECTED) {
+            bridgeState.config?.toDspSettings(settings.performanceMode)?.let { settings = it }
+        }
+    }
+    LaunchedEffect(settings, bridgeState.status, bridgeState.config) {
         delay(250)
-        withContext(Dispatchers.Default) { engine.update(settings) }
+        if (bridgeState.status == VexPlayerBridgeStatus.CONNECTED) {
+            val hostSettings = bridgeState.config?.toDspSettings(settings.performanceMode)
+            if (hostSettings != settings) {
+                bridgeClient.apply(VexPlayerBridgeConfig.fromDspSettings(settings))
+            }
+        } else {
+            withContext(Dispatchers.Default) { engine.update(settings) }
+        }
         withContext(Dispatchers.IO) { presetStore.saveLastSettings(settings) }
     }
 
@@ -118,18 +139,75 @@ private fun EqualizerScreen() {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text("Master EQ", style = MaterialTheme.typography.titleLarge)
-                        Text(if (settings.enabled) "DSP profile: enabled" else "DSP profile: bypass", color = VexTextMuted)
+                        Text(
+                            if (bridgeState.status == VexPlayerBridgeStatus.CONNECTED) "VEXPlayer DSP · remote control active"
+                            else if (settings.enabled) "DSP profile: enabled" else "DSP profile: bypass",
+                            color = VexTextMuted
+                        )
                     }
                     Switch(checked = settings.enabled, onCheckedChange = { settings = settings.copy(enabled = it) })
                 }
-                Text("Configuration preview only · no audio stream is connected yet. Playback-host integration is the next stage.",
-                    color = VexTextMuted, style = MaterialTheme.typography.bodySmall)
+                Text(
+                    if (bridgeState.status == VexPlayerBridgeStatus.CONNECTED)
+                        "VEXPlayer is processing playback through its existing DSP. VEX EQ is the active control surface."
+                    else "Standalone configuration preview · connect VEXPlayer to control its playback DSP.",
+                    color = VexTextMuted, style = MaterialTheme.typography.bodySmall
+                )
+            }
+        }
+
+        Card(colors = CardDefaults.cardColors(containerColor = VexPanel)) {
+            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text("VEXPlayer Integration", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                    when (bridgeState.status) {
+                        VexPlayerBridgeStatus.CONNECTED -> Text("ACTIVE", color = VexPurple, style = MaterialTheme.typography.labelMedium)
+                        VexPlayerBridgeStatus.READY -> Text("AVAILABLE", color = VexTextMuted, style = MaterialTheme.typography.labelMedium)
+                        VexPlayerBridgeStatus.CONNECTING -> Text("CONNECTING", color = VexTextMuted, style = MaterialTheme.typography.labelMedium)
+                        VexPlayerBridgeStatus.ERROR -> Text("UNAVAILABLE", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelMedium)
+                        VexPlayerBridgeStatus.DISCONNECTED -> Text("OFFLINE", color = VexTextMuted, style = MaterialTheme.typography.labelMedium)
+                    }
+                }
+                Text(
+                    bridgeState.message ?: "Searching for VEXPlayer…",
+                    color = VexTextMuted, style = MaterialTheme.typography.bodySmall
+                )
+                if (bridgeState.status == VexPlayerBridgeStatus.CONNECTED) {
+                    Text("VEXPlayer's own EQ controls are locked until this connection is released. Playback continues through one DSP chain.",
+                        color = VexTextMuted, style = MaterialTheme.typography.bodySmall)
+                }
+                Button(
+                    onClick = {
+                        when (bridgeState.status) {
+                            VexPlayerBridgeStatus.READY -> bridgeClient.acquireControl()
+                            VexPlayerBridgeStatus.CONNECTED -> bridgeClient.releaseControl()
+                            VexPlayerBridgeStatus.ERROR -> { bridgeClient.close(); bridgeClient.bind() }
+                            VexPlayerBridgeStatus.DISCONNECTED -> bridgeClient.bind()
+                            VexPlayerBridgeStatus.CONNECTING -> Unit
+                        }
+                    },
+                    enabled = bridgeState.status != VexPlayerBridgeStatus.CONNECTING,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        when (bridgeState.status) {
+                            VexPlayerBridgeStatus.READY -> "Enable Advanced Mode"
+                            VexPlayerBridgeStatus.CONNECTED -> "Disconnect VEXPlayer"
+                            VexPlayerBridgeStatus.CONNECTING -> "Connecting…"
+                            VexPlayerBridgeStatus.ERROR -> "Retry Connection"
+                            VexPlayerBridgeStatus.DISCONNECTED -> "Find VEXPlayer"
+                        }
+                    )
+                }
             }
         }
 
         Card(colors = CardDefaults.cardColors(containerColor = VexPanel)) {
             Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Processing Mode", style = MaterialTheme.typography.titleMedium)
+                if (bridgeState.status == VexPlayerBridgeStatus.CONNECTED) {
+                    Text("VEXPlayer uses its own full-resolution DSP profile; Low / Mid / High applies to standalone VEX EQ processing.", color = VexTextMuted, style = MaterialTheme.typography.bodySmall)
+                }
                 Text(
                     when (settings.performanceMode) {
                         DspPerformanceMode.LOW -> "Low · 9 graphic filters · up to 2 parametric bands"
