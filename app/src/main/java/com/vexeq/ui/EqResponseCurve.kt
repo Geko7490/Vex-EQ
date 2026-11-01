@@ -8,12 +8,15 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -23,6 +26,8 @@ import com.vexeq.dsp.AudioDspEngine
 import com.vexeq.dsp.ParametricBand
 import kotlin.math.PI
 import kotlin.math.cos
+import kotlin.math.exp
+import kotlin.math.ln
 import kotlin.math.ln
 import kotlin.math.log10
 import kotlin.math.pow
@@ -41,6 +46,9 @@ private val GraphGrid = Color(0xFF302C38)
 fun EqResponseCurve(
     graphicGainsDb: List<Float>,
     parametricBands: List<ParametricBand>,
+    selectedBandIndex: Int = -1,
+    onSelectBand: (Int) -> Unit = {},
+    onBandChange: (Int, ParametricBand) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
     val points = EqCurveMath.buildCurve(graphicGainsDb, parametricBands)
@@ -60,6 +68,35 @@ fun EqResponseCurve(
             Canvas(
                 modifier = Modifier.fillMaxWidth().height(164.dp).padding(top = 8.dp, bottom = 4.dp)
                     .background(Color(0xFF101014))
+                    .pointerInput(parametricBands) {
+                        detectTapGestures { offset ->
+                            val index = nearestBand(parametricBands, offset.x, offset.y, size.width.toFloat(), size.height.toFloat())
+                            if (index >= 0) onSelectBand(index)
+                        }
+                    }
+                    .pointerInput(parametricBands, selectedBandIndex) {
+                        var dragIndex = -1
+                        detectDragGestures(
+                            onDragStart = { offset ->
+                                dragIndex = if (selectedBandIndex in parametricBands.indices) selectedBandIndex
+                                else nearestBand(parametricBands, offset.x, offset.y, size.width.toFloat(), size.height.toFloat())
+                                if (dragIndex >= 0) onSelectBand(dragIndex)
+                            },
+                            onDragEnd = { dragIndex = -1 },
+                            onDragCancel = { dragIndex = -1 }
+                        ) { change, _ ->
+                            if (dragIndex in parametricBands.indices) {
+                                val width = size.width.toFloat().coerceAtLeast(1f)
+                                val height = size.height.toFloat().coerceAtLeast(1f)
+                                val updated = parametricBands[dragIndex].copy(
+                                    frequencyHz = frequencyAt(change.position.x, width),
+                                    gainDb = gainAt(change.position.y, height)
+                                )
+                                onBandChange(dragIndex, updated)
+                            }
+                            change.consume()
+                        }
+                    }
             ) {
                 val left = 1f
                 val right = size.width - 1f
@@ -89,6 +126,19 @@ fun EqResponseCurve(
                     if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
                 }
                 drawPath(path, GraphPurple, style = Stroke(width = 2.6f))
+                parametricBands.forEachIndexed { index, band ->
+                    val x = (ln(band.frequencyHz.coerceIn(20f, 20_000f).toDouble() / 20.0) /
+                        ln(20_000.0 / 20.0) * (right - left)).toFloat() + left
+                    val y = zeroY - (band.gainDb.coerceIn(-18f, 18f) / 36f) * graphHeight
+                    drawCircle(
+                        color = if (index == selectedBandIndex) Color.White else GraphPurple,
+                        radius = if (index == selectedBandIndex) 6f else 4f,
+                        center = Offset(x, y)
+                    )
+                    if (index == selectedBandIndex) {
+                        drawCircle(color = GraphPurple, radius = 9f, center = Offset(x, y), style = Stroke(1.5f))
+                    }
+                }
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -153,4 +203,33 @@ internal object EqCurveMath {
         val denominator = sqrt(dr * dr + di * di).coerceAtLeast(1e-12)
         return 20.0 * log10((numerator / denominator).coerceAtLeast(1e-12))
     }
+}
+
+internal fun frequencyAt(x: Float, width: Float): Float {
+    val fraction = (x / width.coerceAtLeast(1f)).coerceIn(0f, 1f)
+    return exp(ln(20f) + (ln(20_000f) - ln(20f)) * fraction).coerceIn(20f, 20_000f)
+}
+
+internal fun gainAt(y: Float, height: Float): Float {
+    val fraction = (1f - y / height.coerceAtLeast(1f)).coerceIn(0f, 1f)
+    return (fraction * 36f - 18f).coerceIn(-12f, 12f)
+}
+
+private fun nearestBand(
+    bands: List<ParametricBand>,
+    x: Float,
+    y: Float,
+    width: Float,
+    height: Float
+): Int {
+    if (bands.isEmpty()) return -1
+    return bands.indices.minByOrNull { index ->
+        val band = bands[index]
+        val bandX = ln(band.frequencyHz.coerceIn(20f, 20_000f).toDouble() / 20.0) /
+            ln(20_000.0 / 20.0) * width
+        val bandY = (18f - band.gainDb.coerceIn(-18f, 18f)) / 36f * height
+        val dx = (x - bandX).toDouble()
+        val dy = (y - bandY).toDouble()
+        dx * dx + dy * dy
+    } ?: -1
 }
