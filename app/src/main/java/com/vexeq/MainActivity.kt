@@ -31,6 +31,7 @@ import com.vexeq.dsp.AudioDspEngine
 import com.vexeq.dsp.DspSettings
 import com.vexeq.dsp.DspPerformanceMode
 import com.vexeq.dsp.ParametricBand
+import com.vexeq.dsp.ParametricFilterType
 import com.vexeq.dsp.PresetStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -526,16 +527,34 @@ private fun ParametricBandCard(
     var frequencyText by remember(index) { mutableStateOf(band.frequencyHz.toInt().toString()) }
     var gainText by remember(index) { mutableStateOf("%.1f".format(java.util.Locale.US, band.gainDb)) }
     var qText by remember(index) { mutableStateOf("%.2f".format(java.util.Locale.US, band.q)) }
+    var filterMenuExpanded by remember(index) { mutableStateOf(false) }
     LaunchedEffect(band.frequencyHz) { frequencyText = band.frequencyHz.toInt().toString() }
     LaunchedEffect(band.gainDb) { gainText = "%.1f".format(java.util.Locale.US, band.gainDb) }
     LaunchedEffect(band.q) { qText = "%.2f".format(java.util.Locale.US, band.q) }
     Card(colors = CardDefaults.cardColors(containerColor = VexBackground)) {
         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("Band ${index + 1} · Bell", modifier = Modifier.weight(1f),
+                Text("Band ${index + 1}", modifier = Modifier.weight(1f),
                     style = MaterialTheme.typography.titleSmall)
+                Switch(checked = band.enabled, onCheckedChange = { onChange(band.copy(enabled = it)) })
                 TextButton(onClick = onDuplicate) { Text("Copy") }
                 TextButton(onClick = onRemove) { Text("Remove") }
+            }
+            Box {
+                OutlinedButton(onClick = { filterMenuExpanded = true }) {
+                    Text("Filter · ${band.filterType.label}")
+                }
+                DropdownMenu(expanded = filterMenuExpanded, onDismissRequest = { filterMenuExpanded = false }) {
+                    ParametricFilterType.values().forEach { type ->
+                        DropdownMenuItem(
+                            text = { Text(type.label) },
+                            onClick = {
+                                onChange(band.copy(filterType = type))
+                                filterMenuExpanded = false
+                            }
+                        )
+                    }
+                }
             }
             Text("MANUAL VALUES", color = VexTextMuted, style = MaterialTheme.typography.labelSmall)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
