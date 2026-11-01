@@ -19,6 +19,8 @@ import com.vexeq.ui.EqResponseCurve
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.text.KeyboardOptions
 import com.vexeq.compat.CompatibilityEngine
 import com.vexeq.compat.CompatibilityReport
 import com.vexeq.bridge.VexPlayerBridgeClient
@@ -125,6 +127,30 @@ private fun EqualizerScreen(bridgeClient: VexPlayerBridgeClient, bridgeState: Ve
         }
     }
     var settings by remember { mutableStateOf(presetStore.loadLastSettings()) }
+    var undoStack by remember { mutableStateOf<List<DspSettings>>(emptyList()) }
+    var redoStack by remember { mutableStateOf<List<DspSettings>>(emptyList()) }
+    var aSettings by remember { mutableStateOf<DspSettings?>(null) }
+    var bSettings by remember { mutableStateOf<DspSettings?>(null) }
+    var showingA by remember { mutableStateOf(false) }
+    fun commitSettings(next: DspSettings) {
+        if (next != settings) {
+            undoStack = (undoStack + settings).takeLast(100)
+            redoStack = emptyList()
+            settings = next
+        }
+    }
+    fun undoSettings() {
+        val previous = undoStack.lastOrNull() ?: return
+        redoStack = (redoStack + settings).takeLast(100)
+        undoStack = undoStack.dropLast(1)
+        settings = previous
+    }
+    fun redoSettings() {
+        val next = redoStack.lastOrNull() ?: return
+        undoStack = (undoStack + settings).takeLast(100)
+        redoStack = redoStack.dropLast(1)
+        settings = next
+    }
     var advancedStudio by remember { mutableStateOf(false) }
     var selectedParametricBand by remember { mutableIntStateOf(-1) }
     val engine = remember { AudioDspEngine(48_000, 2, settings) }
@@ -229,9 +255,9 @@ private fun EqualizerScreen(bridgeClient: VexPlayerBridgeClient, bridgeState: Ve
                 }
                 Text(
                     when (settings.performanceMode) {
-                        DspPerformanceMode.LOW -> "Low · 9 graphic filters · up to 2 parametric bands"
-                        DspPerformanceMode.MID -> "Mid · 16 graphic filters · up to 4 parametric bands"
-                        DspPerformanceMode.HIGH -> "High · 31 graphic filters · up to 8 parametric bands"
+                        DspPerformanceMode.LOW -> "Low · 9 graphic filters · up to 4 parametric bands"
+                        DspPerformanceMode.MID -> "Mid · 16 graphic filters · up to 8 parametric bands"
+                        DspPerformanceMode.HIGH -> "High · 31 graphic filters · up to 16 parametric bands"
                     },
                     color = VexTextMuted, style = MaterialTheme.typography.bodySmall
                 )
@@ -311,7 +337,31 @@ private fun EqualizerScreen(bridgeClient: VexPlayerBridgeClient, bridgeState: Ve
 
         if (advancedStudio) {
             Text("PARAMETRIC EQ WORKSPACE", color = VexPurple, style = MaterialTheme.typography.labelMedium)
-            Text("Shape the combined response curve, then fine-tune each filter below.", color = VexTextMuted, style = MaterialTheme.typography.bodySmall)
+            Text("Touch or drag a node, then enter exact values below. Both controls edit the same live PEQ settings.", color = VexTextMuted, style = MaterialTheme.typography.bodySmall)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            OutlinedButton(onClick = { undoSettings() }, enabled = undoStack.isNotEmpty(), modifier = Modifier.weight(1f)) { Text("Undo") }
+            OutlinedButton(onClick = { redoSettings() }, enabled = redoStack.isNotEmpty(), modifier = Modifier.weight(1f)) { Text("Redo") }
+            OutlinedButton(onClick = { aSettings = settings; showingA = false }, modifier = Modifier.weight(1f)) { Text("Store A") }
+            OutlinedButton(onClick = { bSettings = settings; showingA = false }, modifier = Modifier.weight(1f)) { Text("Store B") }
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = {
+                val target = if (showingA) bSettings else aSettings
+                if (target != null) commitSettings(target)
+                showingA = !showingA
+            }, enabled = aSettings != null && bSettings != null, modifier = Modifier.weight(1f)) {
+                Text(if (showingA) "Switch to B" else "Switch to A")
+            }
+            OutlinedButton(onClick = { commitSettings(settings.copy(parametricBands = emptyList())) },
+                modifier = Modifier.weight(1f)) { Text("Clear PEQ") }
+        }
+        Text(
+            when {
+                aSettings == null || bSettings == null -> "A/B: Store both snapshots to compare settings."
+                showingA -> "A/B preview: A snapshot is active"
+                else -> "A/B preview: B/current snapshot is active"
+            }, color = VexTextMuted, style = MaterialTheme.typography.labelSmall
+        )
         EqResponseCurve(
             graphicGainsDb = settings.graphicGainsDb,
             parametricBands = settings.parametricBands,
@@ -321,7 +371,7 @@ private fun EqualizerScreen(bridgeClient: VexPlayerBridgeClient, bridgeState: Ve
                 val updated = settings.parametricBands.toMutableList()
                 if (index in updated.indices) {
                     updated[index] = changed
-                    settings = settings.copy(parametricBands = updated)
+                    commitSettings(settings.copy(parametricBands = updated))
                 }
             }
         )
@@ -331,14 +381,14 @@ private fun EqualizerScreen(bridgeClient: VexPlayerBridgeClient, bridgeState: Ve
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text("Parametric EQ", style = MaterialTheme.typography.titleLarge)
-                        Text("${settings.parametricBands.size}/8 bands", color = VexTextMuted,
+                        Text("${settings.parametricBands.size}/16 bands", color = VexTextMuted,
                             style = MaterialTheme.typography.bodySmall)
                     }
                     Button(
                         onClick = {
-                            settings = settings.copy(
+                            commitSettings(settings.copy(
                                 parametricBands = settings.parametricBands + ParametricBand()
-                            )
+                            ))
                             selectedParametricBand = settings.parametricBands.lastIndex
                         },
                         enabled = settings.parametricBands.size < AudioDspEngine.MAX_PARAMETRIC_BANDS
@@ -351,12 +401,12 @@ private fun EqualizerScreen(bridgeClient: VexPlayerBridgeClient, bridgeState: Ve
                         onChange = { changed ->
                             val updated = settings.parametricBands.toMutableList()
                             updated[index] = changed
-                            settings = settings.copy(parametricBands = updated)
+                            commitSettings(settings.copy(parametricBands = updated))
                         },
                         onRemove = {
-                            settings = settings.copy(
+                            commitSettings(settings.copy(
                                 parametricBands = settings.parametricBands.filterIndexed { i, _ -> i != index }
-                            )
+                            ))
                         }
                     )
                 }
@@ -381,11 +431,11 @@ private fun EqualizerScreen(bridgeClient: VexPlayerBridgeClient, bridgeState: Ve
                         Slider(value = value, onValueChange = { newValue ->
                             val updated = settings.graphicGainsDb.toMutableList()
                             updated[index] = newValue
-                            settings = settings.copy(graphicGainsDb = updated)
+                            commitSettings(settings.copy(graphicGainsDb = updated))
                         }, valueRange = -12f..12f)
                     }
                 }
-                Button(onClick = { settings = settings.copy(graphicGainsDb = List(31) { 0f }) },
+                Button(onClick = { commitSettings(settings.copy(graphicGainsDb = List(31) { 0f })) },
                     modifier = Modifier.fillMaxWidth()) { Text("Reset all bands") }
             }
         }
