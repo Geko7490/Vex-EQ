@@ -409,10 +409,11 @@ private fun EqualizerScreen(bridgeClient: VexPlayerBridgeClient, bridgeState: Ve
                     }
                     Button(
                         onClick = {
+                            val nextIndex = settings.parametricBands.size
                             commitSettings(settings.copy(
                                 parametricBands = settings.parametricBands + ParametricBand()
                             ))
-                            selectedParametricBand = settings.parametricBands.lastIndex
+                            selectedParametricBand = nextIndex
                         },
                         enabled = settings.parametricBands.size < AudioDspEngine.MAX_PARAMETRIC_BANDS
                     ) { Text("Add band") }
