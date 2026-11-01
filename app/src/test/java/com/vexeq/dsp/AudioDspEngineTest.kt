@@ -50,7 +50,7 @@ class AudioDspEngineTest {
         ).sanitized()
         assertEquals(31, settings.graphicGainsDb.size)
         assertEquals(12f, settings.graphicGainsDb.first(), 0f)
-        assertEquals(8, settings.parametricBands.size)
+        assertEquals(12, settings.parametricBands.size)
         assertEquals(20_000f, settings.parametricBands.first().frequencyHz, 0f)
         assertEquals(12f, settings.parametricBands.first().gainDb, 0f)
         assertEquals(10f, settings.parametricBands.first().q, 0f)
