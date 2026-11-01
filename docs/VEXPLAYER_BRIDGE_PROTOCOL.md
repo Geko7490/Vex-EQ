@@ -2,7 +2,7 @@
 
 ## Status
 
-This document defines the integration contract only. The current VEX-EQ repository contains a transport-neutral DTO; it does **not** yet contain a working Android IPC client, and VEXPlayer does **not** yet expose the receiver described here.
+This document describes the implemented Messenger contract on the feature branches. VEXPlayer remains the sole owner of playback DSP; VEX EQ is a remote control surface plus an optional read-only spectrum renderer.
 
 VEXPlayer remains the sole owner of its Media3 PCM DSP chain. VEX EQ is an optional remote control surface. Never attach a second processor to VEXPlayer playback.
 
@@ -16,7 +16,7 @@ VEXPlayer remains the sole owner of its Media3 PCM DSP chain. VEX EQ is an optio
 
 ## Transport and authentication
 
-Use an explicit bound Android Service in VEXPlayer. Do not use implicit broadcasts, an unrestricted exported receiver, or an unauthenticated provider.
+Use the explicit, signature-protected bound Android Service in VEXPlayer. Do not use implicit broadcasts, an unrestricted exported receiver, or an unauthenticated provider.
 
 VEXPlayer should declare a custom signature permission:
 
@@ -39,15 +39,7 @@ On the host side, also validate the calling UID/package relationship and reject 
 
 ## API shape
 
-Expose a small Binder/AIDL interface with these operations:
-
-- `getProtocolInfo() -> BridgeInfo`
-- `getCurrentState() -> BridgeState`
-- `applyConfig(config, clientRevision) -> ApplyResult`
-- `registerCallback(callback)`
-- `unregisterCallback(callback)`
-
-Keep Binder methods fast. Validate and sanitize the complete payload before mutating the live controller. Never perform disk I/O or audio-thread work in a Binder call.
+The current transport is Android `Messenger` over an explicit bound Service. Commands are protocol-info, current-state, acquire/release control, apply-config, subscribe/unsubscribe spectrum. Keep handlers fast. Validate and sanitize complete settings snapshots before mutating the live controller. Never perform disk I/O or audio-thread work in a Binder call.
 
 ## Data contract
 
@@ -78,15 +70,33 @@ Reject unknown protocol versions and malformed payloads. Do not silently truncat
 - Disconnecting VEX EQ must not disable EQ, reset settings, or stop playback. VEXPlayer continues using its own last saved state.
 - If the client reconnects, it first fetches host state and then reconciles. It must not blindly overwrite host state with an old local preset.
 
+
+## Spectrum side channel
+
+The same signature-protected service exposes a read-only analysis stream:
+
+| Message | Code | Purpose |
+|---|---:|---|
+| `MSG_SUBSCRIBE_SPECTRUM` | 6 | Begin bounded spectrum frames |
+| `MSG_UNSUBSCRIBE_SPECTRUM` | 7 | Stop the stream |
+| `MSG_SPECTRUM_READY` | 106 | Subscription accepted |
+| `MSG_SPECTRUM_FRAME` | 107 | One analysis frame |
+
+Each frame contains 64 normalized logarithmic magnitudes, 64 peak values, up to 160 waveform samples, bass/mid/treble energy, beat pulse, RMS and a monotonic timestamp. VEXPlayer sends frames at up to 15 FPS. VEX EQ sanitizes array lengths and finite numeric values before rendering.
+
+The host reuses its existing `VisualizerController` through owner leases. The Spectrum screen and VEX EQ can both observe the stream without one consumer stopping capture for the other. VEX EQ does not create an `android.media.audiofx.Visualizer` instance and does not send frames through the PCM/DSP chain. The spectrum stream is analysis-only and must never be interpreted as a second audio processor.
+
+The host's Android audio-visualization permission may need to be granted in VEXPlayer before frames are available. If capture is unavailable, show an explicit permission/capture state; do not fall back to microphone recording or system loopback.
+
 ## Advanced-mode lifecycle
 
-1. VEX EQ checks whether `com.vexmusic.player` is installed and whether the bridge permission is granted.
-2. Bind explicitly and call `getProtocolInfo()`.
-3. Confirm a supported protocol version, then fetch host state.
-4. Enter advanced mode only after the host confirms the connection.
-5. Send complete, validated snapshots when the user changes settings.
+1. VEX EQ checks whether `com.vexmusic.player` is installed and binds explicitly.
+2. Confirm protocol v1, then fetch host state.
+3. Acquire EQ control only when the user enables Advanced Mode.
+4. Send complete, validated snapshots when the user changes settings.
+5. Subscribe to spectrum frames only while Spectrum Studio is visible; this does not require EQ control ownership.
 6. Reflect host acknowledgements and host-originated updates.
-7. On binder death/disconnect, show disconnected state and keep VEX EQ's standalone mode available.
+7. Release spectrum subscription and EQ control independently. On binder death/disconnect, show disconnected state and keep standalone mode available.
 
 ## Failure behavior
 
