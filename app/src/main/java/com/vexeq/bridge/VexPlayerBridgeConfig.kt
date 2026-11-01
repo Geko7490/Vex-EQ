@@ -81,7 +81,7 @@ data class VexPlayerBridgeConfig(
         const val CURRENT_PROTOCOL_VERSION = 2
 
         fun fromDspSettings(settings: DspSettings): VexPlayerBridgeConfig {
-            // VEXPlayer's host DSP supports all eight PEQ bands regardless of VEX EQ's
+            // VEXPlayer's host DSP supports all 16 PEQ bands regardless of VEX EQ's
             // standalone Low / Mid / High workload profile.
             val safe = settings.copy(performanceMode = DspPerformanceMode.HIGH).sanitized()
             return VexPlayerBridgeConfig(
