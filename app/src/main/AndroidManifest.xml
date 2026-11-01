@@ -1,5 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <uses-permission android:name="com.vexmusic.player.permission.CONTROL_EQ" />
     <uses-feature android:name="android.hardware.audio.output" android:required="false" />
 
     <queries>
