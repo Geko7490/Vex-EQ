@@ -51,6 +51,8 @@ class VexPlayerBridgeClient(context: Context) {
     private var spectrumSubscribed = false
     private val mutableSpectrumFrame = MutableStateFlow(BridgeSpectrumFrame())
     val spectrumFrame: StateFlow<BridgeSpectrumFrame> = mutableSpectrumFrame.asStateFlow()
+    private val mutableSpectrumError = MutableStateFlow<String?>(null)
+    val spectrumError: StateFlow<String?> = mutableSpectrumError.asStateFlow()
 
     private val incoming = Messenger(object : Handler(Looper.getMainLooper()) {
         override fun handleMessage(message: Message) {
@@ -75,6 +77,7 @@ class VexPlayerBridgeClient(context: Context) {
         override fun onServiceDisconnected(name: ComponentName?) {
             spectrumSubscribed = false
             mutableSpectrumFrame.value = BridgeSpectrumFrame()
+            mutableSpectrumError.value = null
             serviceMessenger = null
             mutableState.value = mutableState.value.copy(
                 status = VexPlayerBridgeStatus.DISCONNECTED,
@@ -137,6 +140,7 @@ class VexPlayerBridgeClient(context: Context) {
         send(MSG_UNSUBSCRIBE_SPECTRUM)
         spectrumSubscribed = false
         mutableSpectrumFrame.value = BridgeSpectrumFrame()
+        mutableSpectrumError.value = null
     }
 
     fun acquireControl() {
@@ -206,6 +210,8 @@ class VexPlayerBridgeClient(context: Context) {
             MSG_CONTROL_ACQUIRED -> acceptHostState(message.data, VexPlayerBridgeStatus.CONNECTED)
             MSG_HOST_STATE -> acceptHostState(message.data, VexPlayerBridgeStatus.CONNECTED)
             MSG_SPECTRUM_FRAME -> acceptSpectrumFrame(message.data)
+            MSG_SPECTRUM_ERROR -> mutableSpectrumError.value = message.data.getString(KEY_ERROR)
+                ?: "VEXPlayer spectrum capture is unavailable."
             MSG_SPECTRUM_READY -> Unit
             MSG_RESULT -> {
                 val data = message.data
@@ -226,6 +232,7 @@ class VexPlayerBridgeClient(context: Context) {
     }
 
     private fun acceptSpectrumFrame(data: Bundle) {
+        mutableSpectrumError.value = null
         val magnitudes = data.getFloatArray(KEY_SPECTRUM_MAGNITUDES)?.take(SPECTRUM_BANDS)
             ?.map { if (it.isFinite()) it.coerceIn(0f, 1f) else 0f }?.toFloatArray() ?: FloatArray(0)
         val peaks = data.getFloatArray(KEY_SPECTRUM_PEAKS)?.take(SPECTRUM_BANDS)
@@ -322,6 +329,7 @@ class VexPlayerBridgeClient(context: Context) {
         private const val MSG_RESULT = 105
         private const val MSG_SPECTRUM_READY = 106
         private const val MSG_SPECTRUM_FRAME = 107
+        private const val MSG_SPECTRUM_ERROR = 108
 
         private const val KEY_PROTOCOL_VERSION = "protocolVersion"
         private const val KEY_HOST_REVISION = "hostRevision"
