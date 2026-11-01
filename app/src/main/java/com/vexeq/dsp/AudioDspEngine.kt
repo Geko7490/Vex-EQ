@@ -93,10 +93,10 @@ class AudioDspEngine(
         private val outputGain: Float
 
         init {
-            graphicFilters = BAND_FREQUENCIES.mapIndexedNotNull { index, frequency ->
+            graphicFilters = AudioDspEngine.BAND_FREQUENCIES.mapIndexedNotNull { index, frequency ->
                 val gain = settings.graphicGainsDb[index]
                 if (abs(gain) < 0.0001f) null
-                else Biquad(peaking(frequency.toFloat(), gain, GRAPHIC_Q), channels)
+                else Biquad(peaking(frequency.toFloat(), gain, AudioDspEngine.GRAPHIC_Q), channels)
             }.toTypedArray()
             parametricFilters = settings.parametricBands.mapNotNull { band ->
                 if (abs(band.gainDb) < 0.0001f) null
@@ -146,13 +146,13 @@ class AudioDspEngine(
                         }
                         if (bassAmount > 0f) {
                             val low = bassFilter.process(sample, ch)
-                            val boostGain = dbToLinear(5f * bassAmount)
+                            val boostGain = AudioDspEngine.dbToLinear(5f * bassAmount)
                             val magnitude = abs(low * boostGain)
                             val coefficient = if (magnitude > bassEnvelope[ch]) attack else bassRelease
                             bassEnvelope[ch] = coefficient * bassEnvelope[ch] + (1f - coefficient) * magnitude
                             val envelope = bassEnvelope[ch]
-                            val compressed = if (envelope > BASS_THRESHOLD) {
-                                BASS_THRESHOLD + (envelope - BASS_THRESHOLD) / BASS_RATIO
+                            val compressed = if (envelope > AudioDspEngine.BASS_THRESHOLD) {
+                                AudioDspEngine.BASS_THRESHOLD + (envelope - AudioDspEngine.BASS_THRESHOLD) / AudioDspEngine.BASS_RATIO
                             } else envelope
                             val reduction = if (envelope > 1e-7f) compressed / envelope else 1f
                             sample += low * (boostGain - 1f) * reduction
@@ -178,7 +178,7 @@ class AudioDspEngine(
                 }
 
                 if (active && settings.limiterEnabled) {
-                    val target = if (peak > LIMITER_CEILING) LIMITER_CEILING / peak else 1f
+                    val target = if (peak > AudioDspEngine.LIMITER_CEILING) AudioDspEngine.LIMITER_CEILING / peak else 1f
                     limiterGain = if (target < limiterGain) target
                         else limiterGain + (1f - limiterGain) * limiterRelease
                 } else {
@@ -188,7 +188,7 @@ class AudioDspEngine(
                 ch = 0
                 while (ch < channels) {
                     output[frame * channels + ch] =
-                        (sampleScratch[ch] * limiterGain).coerceIn(-1f, LIMITER_CEILING)
+                        (sampleScratch[ch] * limiterGain).coerceIn(-1f, AudioDspEngine.LIMITER_CEILING)
                     ch++
                 }
                 frame++
@@ -232,7 +232,7 @@ class AudioDspEngine(
         }
 
         private fun peaking(frequency: Float, gainDb: Float, q: Float): Coefficients {
-            if (frequency <= 0f || frequency >= rate * 0.48f || abs(gainDb) < 0.0001f) return IDENTITY
+            if (frequency <= 0f || frequency >= rate * 0.48f || abs(gainDb) < 0.0001f) return AudioDspEngine.IDENTITY
             val a = 10.0.pow(gainDb / 40.0).toFloat()
             val w = (2.0 * PI * frequency / rate).toFloat()
             val cosine = cos(w)
