@@ -70,20 +70,42 @@ private fun VexEqHome() {
     LaunchedEffect(Unit) { bridgeClient.bind() }
     DisposableEffect(bridgeClient) { onDispose { bridgeClient.close() } }
     var selectedTab by remember { mutableIntStateOf(0) }
-    Column(Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 12.dp)) {
-        Text("VEX EQ", color = VexPurple, fontSize = 30.sp, style = MaterialTheme.typography.headlineLarge)
-        Text("PRECISION AUDIO CONTROL", color = VexTextMuted, style = MaterialTheme.typography.labelMedium)
-        Spacer(Modifier.height(14.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Button(onClick = { selectedTab = 0 }, modifier = Modifier.weight(1f)) { Text("EQ") }
-            Button(onClick = { selectedTab = 1 }, modifier = Modifier.weight(1f)) { Text("Analyzer") }
-            Button(onClick = { selectedTab = 2 }, modifier = Modifier.weight(1f)) { Text("System") }
+    Column(Modifier.fillMaxSize()) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("VEX EQ", color = VexPurple, fontSize = 27.sp,
+                    style = MaterialTheme.typography.headlineLarge)
+                Text("PRECISION AUDIO CONTROL", color = VexTextMuted,
+                    style = MaterialTheme.typography.labelSmall)
+            }
+            TextButton(onClick = { selectedTab = 5 }) { Text("⚙") }
         }
-        Spacer(Modifier.height(10.dp))
-        when (selectedTab) {
-            0 -> EqualizerScreen(bridgeClient, bridgeState)
-            1 -> SpectrumStudioScreen(bridgeClient, bridgeState)
-            else -> CompatibilityScreen()
+        Box(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 14.dp)) {
+            when (selectedTab) {
+                0 -> HomeDashboardScreen(
+                    bridgeClient, bridgeState,
+                    openEqualizer = { selectedTab = 1 },
+                    openAnalyzer = { selectedTab = 2 }
+                )
+                1 -> EqualizerScreen(bridgeClient, bridgeState)
+                2 -> SpectrumStudioScreen(bridgeClient, bridgeState)
+                3 -> StudioModulesScreen(bridgeClient, bridgeState)
+                4 -> PresetLibraryScreen(bridgeClient, bridgeState)
+                else -> CompatibilityScreen()
+            }
+        }
+        NavigationBar(containerColor = VexPanel) {
+            listOf("Home", "Equalizer", "Analyzer", "Studio", "Presets").forEachIndexed { index, label ->
+                NavigationBarItem(
+                    selected = selectedTab == index,
+                    onClick = { selectedTab = index },
+                    icon = { Text(label.take(1), color = if (selectedTab == index) VexPurple else VexTextMuted) },
+                    label = { Text(label, style = MaterialTheme.typography.labelSmall) }
+                )
+            }
         }
     }
 }
