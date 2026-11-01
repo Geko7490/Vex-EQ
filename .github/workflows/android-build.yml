@@ -65,6 +65,20 @@ jobs:
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: gradle assembleDebug assembleRelease bundleRelease --stacktrace --no-daemon
+      - name: Verify release signature and print certificate fingerprint
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="app/build/outputs/apk/release/app-release.apk"
+          if [[ -s "$RUNNER_TEMP/vex-eq-release.jks" ]]; then
+            test -s "$APK"
+            "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose "$APK"
+            keytool -printcert -jarfile "$APK"
+            echo "VEX EQ release APK signature verified."
+          else
+            echo "Shared keystore was not configured; this release is unsigned."
+          fi
+
       - name: Upload APK and AAB
         uses: actions/upload-artifact@v6
         with:
