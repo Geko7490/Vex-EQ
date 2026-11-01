@@ -524,6 +524,11 @@ private fun ParametricBandCard(
     val maxLog = ln(20_000f)
     val normalizedFrequency = ((ln(band.frequencyHz.coerceIn(20f, 20_000f)) - minLog) /
         (maxLog - minLog)).coerceIn(0f, 1f)
+    val supportsGain = band.filterType in setOf(
+        ParametricFilterType.BELL, ParametricFilterType.LOW_SHELF, ParametricFilterType.HIGH_SHELF
+    )
+    val qMaximum = if (band.filterType in setOf(ParametricFilterType.LOW_SHELF, ParametricFilterType.HIGH_SHELF)) 1f else 10f
+    val displayedQ = band.q.coerceIn(0.3f, qMaximum)
     var frequencyText by remember(index) { mutableStateOf(band.frequencyHz.toInt().toString()) }
     var gainText by remember(index) { mutableStateOf("%.1f".format(java.util.Locale.US, band.gainDb)) }
     var qText by remember(index) { mutableStateOf("%.2f".format(java.util.Locale.US, band.q)) }
@@ -549,7 +554,8 @@ private fun ParametricBandCard(
                         DropdownMenuItem(
                             text = { Text(type.label) },
                             onClick = {
-                                onChange(band.copy(filterType = type))
+                                val shelf = type in setOf(ParametricFilterType.LOW_SHELF, ParametricFilterType.HIGH_SHELF)
+                                onChange(band.copy(filterType = type, q = band.q.coerceIn(0.3f, if (shelf) 1f else 10f)))
                                 filterMenuExpanded = false
                             }
                         )
@@ -572,6 +578,7 @@ private fun ParametricBandCard(
                     modifier = Modifier.weight(1f),
                     label = { Text("Gain dB") },
                     singleLine = true,
+                    enabled = supportsGain,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
                 )
                 OutlinedTextField(
@@ -589,8 +596,9 @@ private fun ParametricBandCard(
                     val gain = gainText.toFloatOrNull()
                     val q = qText.toFloatOrNull()
                     if (frequency != null && gain != null && q != null &&
-                        frequency in 20f..20_000f && gain in -12f..12f && q in 0.3f..10f
-                    ) onChange(band.copy(frequencyHz = frequency, gainDb = gain, q = q))
+                        frequency in 20f..20_000f &&
+                        (!supportsGain || gain in -12f..12f) && q in 0.3f..qMaximum
+                    ) onChange(band.copy(frequencyHz = frequency, gainDb = if (supportsGain) gain else band.gainDb, q = q))
                 },
                 modifier = Modifier.fillMaxWidth()
             ) { Text("Apply exact values") }
@@ -603,17 +611,19 @@ private fun ParametricBandCard(
                 onChange(band.copy(frequencyHz = hz))
             }, valueRange = 0f..1f)
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("Gain", modifier = Modifier.weight(1f), color = VexTextMuted)
+                Text(if (supportsGain) "Gain" else "Gain · not used by this filter",
+                    modifier = Modifier.weight(1f), color = VexTextMuted)
                 Text("%+.1f dB".format(band.gainDb), color = VexPurple)
             }
             Slider(value = band.gainDb, onValueChange = { onChange(band.copy(gainDb = it)) },
-                valueRange = -12f..12f)
+                enabled = supportsGain, valueRange = -12f..12f)
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("Q Factor", modifier = Modifier.weight(1f), color = VexTextMuted)
-                Text("%.2f".format(band.q), color = VexPurple)
+                Text(if (band.filterType in setOf(ParametricFilterType.LOW_SHELF, ParametricFilterType.HIGH_SHELF)) "Shelf Slope" else "Q Factor",
+                    modifier = Modifier.weight(1f), color = VexTextMuted)
+                Text("%.2f".format(displayedQ), color = VexPurple)
             }
-            Slider(value = band.q, onValueChange = { onChange(band.copy(q = it)) },
-                valueRange = 0.3f..10f)
+            Slider(value = displayedQ, onValueChange = { onChange(band.copy(q = it)) },
+                valueRange = 0.3f..qMaximum)
         }
     }
 }
