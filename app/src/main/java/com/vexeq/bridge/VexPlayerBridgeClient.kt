@@ -186,6 +186,8 @@ class VexPlayerBridgeClient(context: Context) {
                     putInt(KEY_FREQUENCY, band.frequencyHz)
                     putInt(KEY_GAIN, band.gainMb)
                     putFloat(KEY_Q, band.q)
+                    putString(KEY_FILTER_TYPE, band.filterType)
+                    putBoolean(KEY_BAND_ENABLED, band.enabled)
                 }
             }))
         }
@@ -283,7 +285,9 @@ class VexPlayerBridgeClient(context: Context) {
             BridgeParametricBand(
                 frequencyHz = it.getInt(KEY_FREQUENCY),
                 gainMb = it.getInt(KEY_GAIN),
-                q = it.getFloat(KEY_Q)
+                q = it.getFloat(KEY_Q),
+                filterType = it.getString(KEY_FILTER_TYPE) ?: "BELL",
+                enabled = it.getBoolean(KEY_BAND_ENABLED, true)
             )
         }
         VexPlayerBridgeConfig(
@@ -367,6 +371,8 @@ class VexPlayerBridgeClient(context: Context) {
         private const val KEY_FREQUENCY = "frequencyHz"
         private const val KEY_GAIN = "gainMb"
         private const val KEY_Q = "q"
+        private const val KEY_FILTER_TYPE = "filterType"
+        private const val KEY_BAND_ENABLED = "bandEnabled"
         private const val KEY_SPECTRUM_MAGNITUDES = "spectrumMagnitudes"
         private const val KEY_SPECTRUM_PEAKS = "spectrumPeaks"
         private const val KEY_SPECTRUM_WAVEFORM = "spectrumWaveform"
