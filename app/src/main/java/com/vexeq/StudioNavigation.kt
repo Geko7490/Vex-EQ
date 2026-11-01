@@ -118,7 +118,11 @@ fun HomeDashboardScreen(
 fun StudioModulesScreen(bridgeClient: VexPlayerBridgeClient, bridgeState: VexPlayerBridgeState) {
     val config = bridgeState.config
     val connected = bridgeState.status == VexPlayerBridgeStatus.CONNECTED
-    Column(Modifier.fillMaxSize().padding(bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    fun update(transform: (com.vexeq.bridge.VexPlayerBridgeConfig) -> com.vexeq.bridge.VexPlayerBridgeConfig) {
+        config?.let { bridgeClient.apply(transform(it)) }
+    }
+    Column(Modifier.fillMaxSize().padding(bottom = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Card(colors = CardDefaults.cardColors(containerColor = StudioPanel)) {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("STEREO & PHASE", color = StudioPurple, style = MaterialTheme.typography.labelLarge)
@@ -126,35 +130,76 @@ fun StudioModulesScreen(bridgeClient: VexPlayerBridgeClient, bridgeState: VexPla
                 val width = (config?.stereoWidth ?: 0) / 1000f
                 Text("${(width * 100).toInt()}%", color = StudioMuted)
                 Slider(value = width, onValueChange = { value ->
-                    config?.let { bridgeClient.apply(it.copy(stereoWidth = (value * 1000).toInt())) }
+                    update { it.copy(stereoWidth = (value * 1000).toInt()) }
                 }, enabled = connected, valueRange = 0f..1f)
-                Text("Mono compatibility and live phase correlation require channel-separated analysis frames. They are intentionally not estimated from the mono FFT feed.",
+                Text("Width is applied by VEXPlayer's stereo mid/side stage. L/R balance and phase correlation remain unavailable until the host provides channel-separated analysis data.",
                     color = StudioMuted, style = MaterialTheme.typography.bodySmall)
             }
         }
         Card(colors = CardDefaults.cardColors(containerColor = StudioPanel)) {
-            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("DYNAMICS", color = StudioPurple, style = MaterialTheme.typography.labelLarge)
+            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("DYNAMICS STUDIO", color = StudioPurple, style = MaterialTheme.typography.labelLarge)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Compressor", style = MaterialTheme.typography.titleMedium)
+                        Text("Linked-channel RMS/peak protection stage", color = StudioMuted,
+                            style = MaterialTheme.typography.bodySmall)
+                    }
+                    Switch(checked = config?.compressorEnabled ?: false,
+                        onCheckedChange = { enabled -> update { it.copy(compressorEnabled = enabled) } },
+                        enabled = connected && config != null)
+                }
+                val threshold = config?.compressorThresholdDb ?: -18f
+                Text("Threshold · %.1f dB".format(threshold), color = StudioMuted)
+                Slider(value = threshold, onValueChange = { value ->
+                    update { it.copy(compressorThresholdDb = value) }
+                }, enabled = connected && config != null, valueRange = -36f..0f)
+                val ratio = config?.compressorRatio ?: 4f
+                Text("Ratio · %.1f:1".format(ratio), color = StudioMuted)
+                Slider(value = ratio, onValueChange = { value ->
+                    update { it.copy(compressorRatio = value) }
+                }, enabled = connected && config != null, valueRange = 1f..20f)
+                val attack = config?.compressorAttackMs ?: 10f
+                Text("Attack · %.0f ms".format(attack), color = StudioMuted)
+                Slider(value = attack, onValueChange = { value ->
+                    update { it.copy(compressorAttackMs = value) }
+                }, enabled = connected && config != null, valueRange = 1f..100f)
+                val release = config?.compressorReleaseMs ?: 120f
+                Text("Release · %.0f ms".format(release), color = StudioMuted)
+                Slider(value = release, onValueChange = { value ->
+                    update { it.copy(compressorReleaseMs = value) }
+                }, enabled = connected && config != null, valueRange = 10f..1_000f)
+                androidx.compose.material3.HorizontalDivider(color = Color(0xFF292831))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Soft Clipper", style = MaterialTheme.typography.titleMedium)
+                        Text("Smooth saturation before the final safety limiter", color = StudioMuted,
+                            style = MaterialTheme.typography.bodySmall)
+                    }
+                    Switch(checked = config?.softClipperEnabled ?: false,
+                        onCheckedChange = { enabled -> update { it.copy(softClipperEnabled = enabled) } },
+                        enabled = connected && config != null)
+                }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text("Output Limiter", style = MaterialTheme.typography.titleMedium)
-                        Text("VEXPlayer's existing linked-channel safety limiter", color = StudioMuted,
+                        Text("Final linked-channel peak ceiling", color = StudioMuted,
                             style = MaterialTheme.typography.bodySmall)
                     }
-                    Switch(
-                        checked = config?.limiterEnabled ?: true,
-                        onCheckedChange = { enabled -> config?.let { bridgeClient.apply(it.copy(limiterEnabled = enabled)) } },
-                        enabled = connected && config != null
-                    )
+                    Switch(checked = config?.limiterEnabled ?: true,
+                        onCheckedChange = { enabled -> update { it.copy(limiterEnabled = enabled) } },
+                        enabled = connected && config != null)
                 }
-                Text("Compressor, soft clipper and transient shaping are not exposed by the current bridge/DSP contract yet. No inactive controls are presented as working effects.",
-                    color = StudioMuted, style = MaterialTheme.typography.bodySmall)
+                if (!connected) {
+                    Text("Connect VEXPlayer and enable Advanced Mode to change live DSP settings.",
+                        color = StudioMuted, style = MaterialTheme.typography.bodySmall)
+                }
             }
         }
         Card(colors = CardDefaults.cardColors(containerColor = StudioPanel)) {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text("SIGNAL OWNERSHIP", color = StudioPurple, style = MaterialTheme.typography.labelLarge)
-                Text("VEX EQ sends control snapshots. VEXPlayer remains the only playback DSP host; no second audio processor is attached.",
+                Text("VEX EQ sends versioned control snapshots. VEXPlayer remains the sole playback DSP host; the analyzer is a read-only observation path.",
                     color = StudioMuted, style = MaterialTheme.typography.bodySmall)
             }
         }
