@@ -90,8 +90,9 @@ private fun EqualizerScreen() {
     ) { uri ->
         if (uri != null) {
             val result = runCatching {
-                val json = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
-                    ?: error("Cannot open preset file")
+                val json = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use {
+                    it.readBoundedText(1_048_576)
+                } ?: error("Cannot open preset file")
                 presetStore.importJson(json)
             }
             if (result.isSuccess) {
@@ -427,4 +428,17 @@ private fun StatusCard(title: String, status: String, details: String) {
 private fun formatFrequency(hz: Int): String = when {
     hz >= 1_000 -> if (hz % 1_000 == 0) "${hz / 1_000} kHz" else "${hz / 1_000f} kHz"
     else -> "${hz} Hz"
+}
+
+
+private fun java.io.Reader.readBoundedText(maxChars: Int): String {
+    val result = StringBuilder()
+    val buffer = CharArray(8_192)
+    while (true) {
+        val count = read(buffer)
+        if (count < 0) break
+        require(result.length + count <= maxChars) { "Preset file is too large" }
+        result.append(buffer, 0, count)
+    }
+    return result.toString()
 }
