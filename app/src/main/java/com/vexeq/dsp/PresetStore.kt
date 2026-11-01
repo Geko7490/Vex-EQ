@@ -56,6 +56,41 @@ class PresetStore(context: Context) {
     fun delete(name: String): Boolean =
         persist(list().filterNot { it.name.equals(name, ignoreCase = true) })
 
+    @Synchronized
+    fun exportJson(): String {
+        val root = JSONObject().put("format", "vex-eq-presets")
+            .put("version", EXPORT_VERSION)
+            .put("presets", JSONArray().apply {
+                list().forEach { preset ->
+                    put(JSONObject().put("name", preset.name)
+                        .put("updatedAt", preset.updatedAt)
+                        .put("settings", preset.settings.encodeSettings()))
+                }
+            })
+        return root.toString(2)
+    }
+
+    @Synchronized
+    fun importJson(json: String): Int {
+        val root = JSONObject(json)
+        require(root.optString("format") == "vex-eq-presets") { "Not a VEX EQ preset file" }
+        require(root.optInt("version", -1) == EXPORT_VERSION) { "Unsupported preset file version" }
+        val incoming = root.optJSONArray("presets") ?: throw IllegalArgumentException("Missing presets")
+        require(incoming.length() <= MAX_IMPORTED_PRESETS) { "Preset file contains too many entries" }
+        val merged = list().associateBy { it.name.lowercase() }.toMutableMap()
+        var imported = 0
+        for (index in 0 until incoming.length()) {
+            val item = incoming.optJSONObject(index) ?: continue
+            val name = item.optString("name").trim().take(40)
+            val settings = item.optJSONObject("settings") ?: continue
+            if (name.isBlank()) continue
+            merged[name.lowercase()] = EqPreset(name, settings.decodeSettings(), item.optLong("updatedAt"))
+            imported++
+        }
+        check(persist(merged.values.toList())) { "Could not save imported presets" }
+        return imported
+    }
+
     private fun persist(presets: List<EqPreset>): Boolean = runCatching {
         val array = JSONArray()
         presets.forEach { preset ->
@@ -115,5 +150,5 @@ class PresetStore(context: Context) {
         ).sanitized()
     }
 
-    companion object { private const val KEY_PRESETS = "presets"; private const val KEY_LAST_SETTINGS = "last_settings" }
+    companion object { private const val KEY_PRESETS = "presets"; private const val KEY_LAST_SETTINGS = "last_settings"; private const val EXPORT_VERSION = 1; private const val MAX_IMPORTED_PRESETS = 100 }
 }
