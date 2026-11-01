@@ -176,6 +176,7 @@ private fun EqualizerScreen(bridgeClient: VexPlayerBridgeClient, bridgeState: Ve
     }
     var advancedStudio by remember { mutableStateOf(false) }
     var selectedParametricBand by remember { mutableIntStateOf(-1) }
+    var bandGestureActive by remember { mutableStateOf(false) }
     val engine = remember { AudioDspEngine(48_000, 2, settings) }
     LaunchedEffect(bridgeState.config, bridgeState.status) {
         if (bridgeState.status == VexPlayerBridgeStatus.CONNECTED) {
@@ -390,13 +391,21 @@ private fun EqualizerScreen(bridgeClient: VexPlayerBridgeClient, bridgeState: Ve
             parametricBands = settings.parametricBands,
             selectedBandIndex = selectedParametricBand,
             onSelectBand = { selectedParametricBand = it },
+            onBandChangeStart = {
+                if (!bandGestureActive) {
+                    bandGestureActive = true
+                    undoStack = (undoStack + settings).takeLast(100)
+                    redoStack = emptyList()
+                }
+            },
             onBandChange = { index, changed ->
                 val updated = settings.parametricBands.toMutableList()
                 if (index in updated.indices) {
                     updated[index] = changed
-                    commitSettings(settings.copy(parametricBands = updated))
+                    settings = settings.copy(parametricBands = updated)
                 }
-            }
+            },
+            onBandChangeEnd = { bandGestureActive = false }
         )
 
         Card(colors = CardDefaults.cardColors(containerColor = VexPanel)) {
