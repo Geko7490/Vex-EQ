@@ -226,7 +226,7 @@ private fun StereoPhaseCard(frame: com.vexeq.bridge.BridgeSpectrumFrame) {
             val correlation = frame.phaseCorrelation
             if (correlation != null) {
                 Text(
-                    "PHASE CORRELATION  \${if (correlation > 0.05f) "+" else ""}\${"%.2f".format(correlation)}",
+                    "PHASE CORRELATION  ${if (correlation > 0.05f) "+" else ""}${"%.2f".format(correlation)}",
                     color = AnalyzerMuted,
                     style = MaterialTheme.typography.labelMedium
                 )
