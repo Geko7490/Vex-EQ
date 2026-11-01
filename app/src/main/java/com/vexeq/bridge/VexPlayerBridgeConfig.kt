@@ -1,6 +1,7 @@
 package com.vexeq.bridge
 
 import com.vexeq.dsp.DspSettings
+import com.vexeq.dsp.DspPerformanceMode
 import com.vexeq.dsp.ParametricBand
 import kotlin.math.roundToInt
 
@@ -34,11 +35,30 @@ data class VexPlayerBridgeConfig(
                     it.q.isFinite() && it.q in 0.3f..10f
             }
 
+    fun toDspSettings(performanceMode: DspPerformanceMode = DspPerformanceMode.HIGH): DspSettings? {
+        if (!isValid()) return null
+        return DspSettings(
+            enabled = enabled,
+            graphicGainsDb = graphicBandLevelsMb.map { it / 100f },
+            parametricBands = parametricBands.map {
+                com.vexeq.dsp.ParametricBand(it.frequencyHz.toFloat(), it.gainMb / 100f, it.q)
+            },
+            bassBoost = bassStrength / 1_000f,
+            stereoWidth = stereoWidth / 1_000f,
+            preampDb = preampMb / 100f,
+            autoHeadroom = autoHeadroom,
+            limiterEnabled = limiterEnabled,
+            performanceMode = performanceMode
+        )
+    }
+
     companion object {
         const val CURRENT_PROTOCOL_VERSION = 1
 
         fun fromDspSettings(settings: DspSettings): VexPlayerBridgeConfig {
-            val safe = settings.sanitized()
+            // VEXPlayer's host DSP supports all eight PEQ bands regardless of VEX EQ's
+            // standalone Low / Mid / High workload profile.
+            val safe = settings.copy(performanceMode = DspPerformanceMode.HIGH).sanitized()
             return VexPlayerBridgeConfig(
                 enabled = safe.enabled,
                 graphicBandLevelsMb = safe.graphicGainsDb.map { (it * 100f).roundToInt() },
