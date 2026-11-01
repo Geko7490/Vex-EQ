@@ -67,6 +67,7 @@ class AudioDspEngine(
     private var limiterGain = 1f
     private var limiterRelease = releaseCoefficient(rate)
     private var outputGain = 1f
+    private var sampleScratch = FloatArray(channels)
 
     init { rebuild() }
 
@@ -76,6 +77,7 @@ class AudioDspEngine(
         rate = sampleRate.coerceAtLeast(8_000)
         channels = channelCount.coerceIn(1, 8)
         bassEnvelope = FloatArray(channels)
+        sampleScratch = FloatArray(channels)
         limiterRelease = releaseCoefficient(rate)
         rebuild()
     }
@@ -102,8 +104,7 @@ class AudioDspEngine(
         val bassAmount = if (active) config.bassBoost else 0f
         val attack = exp(-1f / (rate * 0.008f))
         val bassRelease = exp(-1f / (rate * 0.100f))
-        val low = FloatArray(channels)
-        val samples = FloatArray(channels)
+        val samples = sampleScratch
 
         var frame = 0
         while (frame < frameCount) {
@@ -142,7 +143,6 @@ class AudioDspEngine(
                 }
                 if (!sample.isFinite()) sample = 0f
                 samples[ch] = sample
-                peak = max(peak, abs(sample))
                 ch++
             }
 
@@ -151,6 +151,13 @@ class AudioDspEngine(
                 val side = (samples[0] - samples[1]) * 0.5f * width
                 samples[0] = mid + side
                 samples[1] = mid - side
+            }
+
+            peak = 0f
+            var peakChannel = 0
+            while (peakChannel < channels) {
+                peak = max(peak, abs(samples[peakChannel]))
+                peakChannel++
             }
 
             if (active && config.limiterEnabled) {
