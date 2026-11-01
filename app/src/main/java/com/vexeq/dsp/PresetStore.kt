@@ -29,6 +29,19 @@ class PresetStore(context: Context) {
         }.sortedBy { it.name.lowercase() }
     }.getOrDefault(emptyList())
 
+    fun loadLastSettings(): DspSettings = runCatching {
+        val json = preferences.getString(KEY_LAST_SETTINGS, null) ?: return DspSettings()
+        JSONObject(json).decodeSettings()
+    }.getOrDefault(DspSettings())
+
+    fun saveLastSettings(settings: DspSettings) {
+        runCatching {
+            preferences.edit()
+                .putString(KEY_LAST_SETTINGS, settings.sanitized().encodeSettings().toString())
+                .apply()
+        }
+    }
+
     @Synchronized
     fun save(name: String, settings: DspSettings): Boolean {
         val cleanName = name.trim().take(40)
@@ -102,5 +115,5 @@ class PresetStore(context: Context) {
         ).sanitized()
     }
 
-    companion object { private const val KEY_PRESETS = "presets" }
+    companion object { private const val KEY_PRESETS = "presets"; private const val KEY_LAST_SETTINGS = "last_settings" }
 }
