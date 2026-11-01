@@ -207,7 +207,7 @@ class AudioDspEngine(
                 ch = 0
                 while (ch < channels) {
                     output[frame * channels + ch] =
-                        (sampleScratch[ch] * limiterGain).coerceIn(-1f, AudioDspEngine.LIMITER_CEILING)
+                        (sampleScratch[ch] * limiterGain).coerceIn(-AudioDspEngine.LIMITER_CEILING, AudioDspEngine.LIMITER_CEILING)
                     ch++
                 }
                 frame++
