@@ -1,0 +1,92 @@
+name: VEX EQ Shared-Signed Bridge Build
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vex-eq-shared-signed-bridge
+  cancel-in-progress: false
+
+jobs:
+  signed-android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle 8.13
+        uses: gradle/actions/setup-gradle@v5
+        with:
+          gradle-version: "8.13"
+
+      - name: Install Android SDK 36
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          SDKMANAGER=$(find "$SDK_ROOT/cmdline-tools" -name sdkmanager -type f | head -n 1)
+          test -n "$SDKMANAGER"
+          yes | "$SDKMANAGER" --sdk_root="$SDK_ROOT" --licenses >/dev/null || true
+          "$SDKMANAGER" --sdk_root="$SDK_ROOT" "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Decode and validate shared release keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${ANDROID_KEYSTORE_BASE64:-}" || { echo "Missing ANDROID_KEYSTORE_BASE64"; exit 1; }
+          test -n "${ANDROID_KEYSTORE_PASSWORD:-}" || { echo "Missing ANDROID_KEYSTORE_PASSWORD"; exit 1; }
+          test -n "${ANDROID_KEY_ALIAS:-}" || { echo "Missing ANDROID_KEY_ALIAS"; exit 1; }
+          test -n "${ANDROID_KEY_PASSWORD:-}" || { echo "Missing ANDROID_KEY_PASSWORD"; exit 1; }
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/vex-shared-release.jks"
+          test -s "$RUNNER_TEMP/vex-shared-release.jks"
+          keytool -list -keystore "$RUNNER_TEMP/vex-shared-release.jks" -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" >/dev/null
+          echo "Shared keystore and alias validated."
+
+      - name: Run lint and unit tests
+        run: |
+          gradle lintDebug testDebugUnitTest --stacktrace --no-daemon
+
+      - name: Build shared-signed release APK and AAB
+        env:
+          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/vex-shared-release.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: gradle assembleRelease bundleRelease --stacktrace --no-daemon
+
+      - name: Verify APK signature and print certificate fingerprints
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="app/build/outputs/apk/release/app-release.apk"
+          AAB="app/build/outputs/bundle/release/app-release.aab"
+          test -s "$APK"
+          test -s "$AAB"
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose "$APK"
+          keytool -printcert -jarfile "$APK"
+          echo "Signed VEX EQ APK and AAB verified."
+
+      - name: Upload shared-signed release artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: VEX-EQ-Shared-Signed-Release
+          path: |
+            app/build/outputs/apk/release/app-release.apk
+            app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+          retention-days: 30
