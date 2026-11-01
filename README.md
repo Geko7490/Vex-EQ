@@ -44,6 +44,12 @@ The transport-neutral contract is implemented in `VexPlayerBridgeConfig`:
 
 The transport and VEXPlayer-side receiver are **not yet implemented**. The security, synchronization, and lifecycle requirements are documented in [VEXPlayer Bridge Protocol v1](docs/VEXPLAYER_BRIDGE_PROTOCOL.md). In particular, the proposed signature-protected Binder service requires both apps to use the same release signing certificate. Confirm that signing strategy before implementing cross-app writes.
 
+## VEXPlayer Advanced EQ integration
+
+VEX EQ can connect to VEXPlayer's existing Media3 PCM DSP through the authenticated Messenger/Binder bridge. When Advanced Mode is active, VEXPlayer remains the only DSP host and its native EQ controls are locked; playback is not processed twice.
+
+**Signing requirement:** Android's signature permission is granted only when both apps are signed with the same certificate. Configure the same `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, and `ANDROID_KEY_PASSWORD` GitHub Actions secrets in both repositories. If these secrets are absent, CI still builds an unsigned release artifact, but cross-app Advanced Mode cannot bind successfully. Use same-certificate release builds for device integration tests.
+
 ## Development
 
 Work is performed on feature branches and proposed through pull requests. GitHub Actions runs Android lint, unit tests, debug/release APK assembly, and release AAB assembly. See the repository's Actions tab for the latest CI result.
