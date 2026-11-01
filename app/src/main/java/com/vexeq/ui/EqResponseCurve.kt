@@ -50,6 +50,8 @@ fun EqResponseCurve(
     selectedBandIndex: Int = -1,
     onSelectBand: (Int) -> Unit = {},
     onBandChange: (Int, ParametricBand) -> Unit = { _, _ -> },
+    onBandChangeStart: () -> Unit = {},
+    onBandChangeEnd: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val points = EqCurveMath.buildCurve(graphicGainsDb, parametricBands)
@@ -57,6 +59,8 @@ fun EqResponseCurve(
     val latestSelectedBand by androidx.compose.runtime.rememberUpdatedState(selectedBandIndex)
     val latestOnSelectBand by androidx.compose.runtime.rememberUpdatedState(onSelectBand)
     val latestOnBandChange by androidx.compose.runtime.rememberUpdatedState(onBandChange)
+    val latestOnBandChangeStart by androidx.compose.runtime.rememberUpdatedState(onBandChangeStart)
+    val latestOnBandChangeEnd by androidx.compose.runtime.rememberUpdatedState(onBandChangeEnd)
     Surface(
         modifier = modifier.fillMaxWidth(),
         color = Color(0xFF141319),
@@ -84,10 +88,19 @@ fun EqResponseCurve(
                         detectDragGestures(
                             onDragStart = { offset ->
                                 dragIndex = nearestBand(latestBands, offset.x, offset.y, size.width.toFloat(), size.height.toFloat())
-                                if (dragIndex >= 0) latestOnSelectBand(dragIndex)
+                                if (dragIndex >= 0) {
+                                    latestOnSelectBand(dragIndex)
+                                    latestOnBandChangeStart()
+                                }
                             },
-                            onDragEnd = { dragIndex = -1 },
-                            onDragCancel = { dragIndex = -1 }
+                            onDragEnd = {
+                                if (dragIndex >= 0) latestOnBandChangeEnd()
+                                dragIndex = -1
+                            },
+                            onDragCancel = {
+                                if (dragIndex >= 0) latestOnBandChangeEnd()
+                                dragIndex = -1
+                            }
                         ) { change, _ ->
                             if (dragIndex in latestBands.indices) {
                                 val width = size.width.toFloat().coerceAtLeast(1f)
@@ -99,8 +112,8 @@ fun EqResponseCurve(
                                     ParametricFilterType.HIGH_SHELF
                                 )
                                 val updated = current.copy(
-                                    frequencyHz = frequencyAt(change.position.x, width),
-                                    gainDb = if (supportsGain) gainAt(change.position.y, height) else current.gainDb
+                                    frequencyHz = frequencyAt(change.position.x - 1f, width - 2f),
+                                    gainDb = if (supportsGain) gainAt(change.position.y - 4f, height - 8f) else current.gainDb
                                 )
                                 latestOnBandChange(dragIndex, updated)
                             }
@@ -139,7 +152,7 @@ fun EqResponseCurve(
                 latestBands.forEachIndexed { index, band ->
                     val x = (ln(band.frequencyHz.coerceIn(20f, 20_000f).toDouble() / 20.0) /
                         ln(20_000.0 / 20.0) * (right - left)).toFloat() + left
-                    val y = zeroY - (band.gainDb.coerceIn(-18f, 18f) / 36f) * graphHeight
+                    val y = top + ((12f - band.gainDb.coerceIn(-12f, 12f)) / 24f) * graphHeight
                     drawCircle(
                         color = (if (index == latestSelectedBand) Color.White else GraphPurple)
                             .copy(alpha = if (band.enabled) 1f else 0.35f),
@@ -296,11 +309,25 @@ private fun nearestBand(
     if (bands.isEmpty()) return -1
     return bands.indices.minByOrNull { index ->
         val band = bands[index]
-        val bandX = ln(band.frequencyHz.coerceIn(20f, 20_000f).toDouble() / 20.0) /
-            ln(20_000.0 / 20.0) * width
-        val bandY = (18f - band.gainDb.coerceIn(-18f, 18f)) / 36f * height
+        val plotWidth = (width - 2f).coerceAtLeast(1f)
+        val plotHeight = (height - 8f).coerceAtLeast(1f)
+        val bandX = 1f + (ln(band.frequencyHz.coerceIn(20f, 20_000f).toDouble() / 20.0) /
+            ln(20_000.0 / 20.0) * plotWidth).toFloat()
+        val bandY = 4f + ((12f - band.gainDb.coerceIn(-12f, 12f)) / 24f) * plotHeight
         val dx = (x - bandX).toDouble()
         val dy = (y - bandY).toDouble()
         dx * dx + dy * dy
+    }?.takeIf { it <= 26.0 * 26.0 }?.let {
+        bands.indices.minByOrNull { index ->
+            val band = bands[index]
+            val plotWidth = (width - 2f).coerceAtLeast(1f)
+            val plotHeight = (height - 8f).coerceAtLeast(1f)
+            val bandX = 1f + (ln(band.frequencyHz.coerceIn(20f, 20_000f).toDouble() / 20.0) /
+                ln(20_000.0 / 20.0) * plotWidth).toFloat()
+            val bandY = 4f + ((12f - band.gainDb.coerceIn(-12f, 12f)) / 24f) * plotHeight
+            val dx = (x - bandX).toDouble()
+            val dy = (y - bandY).toDouble()
+            dx * dx + dy * dy
+        } ?: -1
     } ?: -1
 }
