@@ -15,5 +15,8 @@ Changes from upstream:
 - Updated package and host view for VEX EQ.
 - Replaced the capture helper dependency with VEXPlayer bridge frame data.
 - Removed the fixed 44.1 kHz FFT-bin mapping from the rendering layer; the host supplies already grouped logarithmic magnitudes.
-- Kept only the FFT Bars and FFT Wave painters in this initial adaptation.
+- Added selectable FFT Bars, FFT Line, FFT Wave, RGB Wave, FFT Circle, FFT Circle Wave, and RGB Circle render modes.
+- Added optional Beat Pulse, Rotate, Glitch, Shake, and Peak Hold visual modifiers.
+- Added horizontally scrollable style/effect selectors for narrow phone screens.
+- Circular stereo rendering uses actual left/right bridge magnitudes when available; otherwise it labels no fake stereo source and falls back to the mono frame.
 - Added Apache 2.0 attribution and retained the license text.
