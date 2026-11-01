@@ -123,6 +123,12 @@ class PresetStore(context: Context) {
         put("preampDb", preampDb)
         put("autoHeadroom", autoHeadroom)
         put("limiterEnabled", limiterEnabled)
+        put("compressorEnabled", compressorEnabled)
+        put("compressorThresholdDb", compressorThresholdDb)
+        put("compressorRatio", compressorRatio)
+        put("compressorAttackMs", compressorAttackMs)
+        put("compressorReleaseMs", compressorReleaseMs)
+        put("softClipperEnabled", softClipperEnabled)
         put("performanceMode", performanceMode.name)
     }
 
@@ -154,6 +160,12 @@ class PresetStore(context: Context) {
             preampDb = optDouble("preampDb", 0.0).toFloat(),
             autoHeadroom = optBoolean("autoHeadroom", true),
             limiterEnabled = optBoolean("limiterEnabled", true),
+            compressorEnabled = optBoolean("compressorEnabled", false),
+            compressorThresholdDb = optDouble("compressorThresholdDb", -18.0).toFloat(),
+            compressorRatio = optDouble("compressorRatio", 4.0).toFloat(),
+            compressorAttackMs = optDouble("compressorAttackMs", 10.0).toFloat(),
+            compressorReleaseMs = optDouble("compressorReleaseMs", 120.0).toFloat(),
+            softClipperEnabled = optBoolean("softClipperEnabled", false),
             performanceMode = mode
         ).sanitized()
     }
