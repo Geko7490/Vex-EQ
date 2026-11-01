@@ -12,7 +12,7 @@ The repository is being initialized. The first implementation milestone is the A
 - Compatibility engine that reports platform audio-effect availability without claiming unsupported global processing.
 - Independent DSP engine for VEXPlayer integration and future supported audio sessions.
 - VEXPlayer remains fully functional when VEX EQ is absent or disconnected.
-- One EQ control surface: once the integration is verified and enabled, VEXPlayer's duplicate EQ controls can be retired while its proven PCM processing pipeline remains available as the processing backend.
+- VEXPlayer's built-in EQ and DSP remain in the app. VEX EQ adds an optional advanced VEXPlayer mode with synchronized controls and profiles; the integration must prevent duplicate processing rather than remove the player's native EQ.
 - Low / Mid / High performance profiles, bilingual Turkish / English UI, profile management and diagnostics.
 
 ## Android constraints
