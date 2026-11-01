@@ -20,6 +20,11 @@ data class BridgeSpectrumFrame(
     val magnitudes: FloatArray = FloatArray(0),
     val peaks: FloatArray = FloatArray(0),
     val waveform: FloatArray = FloatArray(0),
+    /** Optional channel-separated FFT data; null/empty means host has not implemented it. */
+    val leftMagnitudes: FloatArray = FloatArray(0),
+    val rightMagnitudes: FloatArray = FloatArray(0),
+    /** -1 = fully out of phase, 0 = uncorrelated, +1 = in phase. */
+    val phaseCorrelation: Float? = null,
     val bass: Float = 0f,
     val mid: Float = 0f,
     val treble: Float = 0f,
@@ -249,10 +254,22 @@ class VexPlayerBridgeClient(context: Context) {
             ?.map { if (it.isFinite()) it.coerceIn(0f, 1f) else 0f }?.toFloatArray() ?: FloatArray(0)
         val waveform = data.getFloatArray(KEY_SPECTRUM_WAVEFORM)?.take(SPECTRUM_WAVE_POINTS)
             ?.map { if (it.isFinite()) it.coerceIn(-1f, 1f) else 0f }?.toFloatArray() ?: FloatArray(0)
+        val leftMagnitudes = data.getFloatArray(KEY_SPECTRUM_LEFT_MAGNITUDES)
+            ?.take(SPECTRUM_BANDS)?.map { if (it.isFinite()) it.coerceIn(0f, 1f) else 0f }
+            ?.toFloatArray() ?: FloatArray(0)
+        val rightMagnitudes = data.getFloatArray(KEY_SPECTRUM_RIGHT_MAGNITUDES)
+            ?.take(SPECTRUM_BANDS)?.map { if (it.isFinite()) it.coerceIn(0f, 1f) else 0f }
+            ?.toFloatArray() ?: FloatArray(0)
+        val phaseCorrelation = if (data.containsKey(KEY_SPECTRUM_PHASE_CORRELATION)) {
+            data.getFloat(KEY_SPECTRUM_PHASE_CORRELATION).takeIf { it.isFinite() }?.coerceIn(-1f, 1f)
+        } else null
         mutableSpectrumFrame.value = BridgeSpectrumFrame(
             magnitudes = magnitudes,
             peaks = peaks,
             waveform = waveform,
+            leftMagnitudes = leftMagnitudes,
+            rightMagnitudes = rightMagnitudes,
+            phaseCorrelation = phaseCorrelation,
             bass = data.getFloat(KEY_SPECTRUM_BASS).coerceIn(0f, 1f),
             mid = data.getFloat(KEY_SPECTRUM_MID).coerceIn(0f, 1f),
             treble = data.getFloat(KEY_SPECTRUM_TREBLE).coerceIn(0f, 1f),
@@ -376,6 +393,10 @@ class VexPlayerBridgeClient(context: Context) {
         private const val KEY_SPECTRUM_MAGNITUDES = "spectrumMagnitudes"
         private const val KEY_SPECTRUM_PEAKS = "spectrumPeaks"
         private const val KEY_SPECTRUM_WAVEFORM = "spectrumWaveform"
+        // Optional v2 extension: older VEXPlayer hosts simply omit these keys.
+        private const val KEY_SPECTRUM_LEFT_MAGNITUDES = "spectrumLeftMagnitudes"
+        private const val KEY_SPECTRUM_RIGHT_MAGNITUDES = "spectrumRightMagnitudes"
+        private const val KEY_SPECTRUM_PHASE_CORRELATION = "spectrumPhaseCorrelation"
         private const val KEY_SPECTRUM_BASS = "spectrumBass"
         private const val KEY_SPECTRUM_MID = "spectrumMid"
         private const val KEY_SPECTRUM_TREBLE = "spectrumTreble"
