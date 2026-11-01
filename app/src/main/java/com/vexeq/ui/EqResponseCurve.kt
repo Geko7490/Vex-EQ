@@ -92,9 +92,15 @@ fun EqResponseCurve(
                             if (dragIndex in latestBands.indices) {
                                 val width = size.width.toFloat().coerceAtLeast(1f)
                                 val height = size.height.toFloat().coerceAtLeast(1f)
-                                val updated = latestBands[dragIndex].copy(
+                                val current = latestBands[dragIndex]
+                                val supportsGain = current.filterType in setOf(
+                                    ParametricFilterType.BELL,
+                                    ParametricFilterType.LOW_SHELF,
+                                    ParametricFilterType.HIGH_SHELF
+                                )
+                                val updated = current.copy(
                                     frequencyHz = frequencyAt(change.position.x, width),
-                                    gainDb = gainAt(change.position.y, height)
+                                    gainDb = if (supportsGain) gainAt(change.position.y, height) else current.gainDb
                                 )
                                 latestOnBandChange(dragIndex, updated)
                             }
@@ -135,7 +141,8 @@ fun EqResponseCurve(
                         ln(20_000.0 / 20.0) * (right - left)).toFloat() + left
                     val y = zeroY - (band.gainDb.coerceIn(-18f, 18f) / 36f) * graphHeight
                     drawCircle(
-                        color = if (index == latestSelectedBand) Color.White else GraphPurple,
+                        color = (if (index == latestSelectedBand) Color.White else GraphPurple)
+                            .copy(alpha = if (band.enabled) 1f else 0.35f),
                         radius = if (index == selectedBandIndex) 6f else 4f,
                         center = Offset(x, y)
                     )
