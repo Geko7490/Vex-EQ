@@ -12,7 +12,7 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 
 enum class DspPerformanceMode(val bandStride: Int, val maxParametricBands: Int) {
-    LOW(4, 4), MID(2, 8), HIGH(1, 16)
+    LOW(4, 16), MID(2, 16), HIGH(1, 16)
 }
 
 data class ParametricBand(
