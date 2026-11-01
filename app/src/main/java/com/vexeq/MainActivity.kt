@@ -120,6 +120,7 @@ private fun EqualizerScreen(bridgeClient: VexPlayerBridgeClient, bridgeState: Ve
         }
     }
     var settings by remember { mutableStateOf(presetStore.loadLastSettings()) }
+    var advancedStudio by remember { mutableStateOf(false) }
     val engine = remember { AudioDspEngine(48_000, 2, settings) }
     LaunchedEffect(bridgeState.config, bridgeState.status) {
         if (bridgeState.status == VexPlayerBridgeStatus.CONNECTED) {
@@ -141,6 +142,11 @@ private fun EqualizerScreen(bridgeClient: VexPlayerBridgeClient, bridgeState: Ve
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(selected = !advancedStudio, onClick = { advancedStudio = false }, label = { Text("Standard") })
+            FilterChip(selected = advancedStudio, onClick = { advancedStudio = true }, label = { Text("Advanced Studio") })
+        }
+        if (!advancedStudio) {
         Card(colors = CardDefaults.cardColors(containerColor = VexPanel)) {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -295,6 +301,11 @@ private fun EqualizerScreen(bridgeClient: VexPlayerBridgeClient, bridgeState: Ve
             }
         }
 
+        }
+
+        if (advancedStudio) {
+            Text("PARAMETRIC EQ WORKSPACE", color = VexPurple, style = MaterialTheme.typography.labelMedium)
+            Text("Shape the combined response curve, then fine-tune each filter below.", color = VexTextMuted, style = MaterialTheme.typography.bodySmall)
         EqResponseCurve(
             graphicGainsDb = settings.graphicGainsDb,
             parametricBands = settings.parametricBands
@@ -363,8 +374,14 @@ private fun EqualizerScreen(bridgeClient: VexPlayerBridgeClient, bridgeState: Ve
             }
         }
 
-        Text("These controls configure VEX EQ's PCM DSP core. They do not yet modify system audio or VEXPlayer playback; that requires playback-host integration and device compatibility checks.",
-            color = VexTextMuted, style = MaterialTheme.typography.bodySmall)
+        Text(
+            if (bridgeState.status == VexPlayerBridgeStatus.CONNECTED)
+                "Live control active: changes are sent to VEXPlayer, which remains the sole playback DSP owner."
+            else
+                "Standalone mode edits a local DSP profile only. Connect VEXPlayer to control its playback EQ; VEX EQ does not process system-wide audio.",
+            color = VexTextMuted, style = MaterialTheme.typography.bodySmall
+        )
+        }
         Spacer(Modifier.height(20.dp))
     }
     if (showSaveDialog) {
