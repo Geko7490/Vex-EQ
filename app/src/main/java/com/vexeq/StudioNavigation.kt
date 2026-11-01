@@ -47,6 +47,12 @@ fun HomeDashboardScreen(
 ) {
     val connected = bridgeState.status == VexPlayerBridgeStatus.CONNECTED
     val config = bridgeState.config
+    var bassValue by remember(config?.bassStrength) {
+        mutableFloatStateOf((config?.bassStrength ?: 0) / 1000f)
+    }
+    var dashboardWidthValue by remember(config?.stereoWidth) {
+        mutableFloatStateOf((config?.stereoWidth ?: 0) / 1000f)
+    }
     Column(Modifier.fillMaxSize().padding(bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Card(colors = CardDefaults.cardColors(containerColor = StudioPanel)) {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -101,16 +107,16 @@ fun HomeDashboardScreen(
         Card(colors = CardDefaults.cardColors(containerColor = StudioPanel)) {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("QUICK CONTROLS", color = StudioPurple, style = MaterialTheme.typography.labelLarge)
-                val bass = (config?.bassStrength ?: 0) / 1000f
-                Text("Bass Boost · ${(bass * 100).toInt()}%", color = StudioMuted)
-                Slider(value = bass, onValueChange = { value ->
-                    config?.let { bridgeClient.apply(it.copy(bassStrength = (value * 1000).toInt())) }
-                }, enabled = connected, valueRange = 0f..1f)
-                val width = (config?.stereoWidth ?: 0) / 1000f
-                Text("Stereo Width · ${(width * 100).toInt()}%", color = StudioMuted)
-                Slider(value = width, onValueChange = { value ->
-                    config?.let { bridgeClient.apply(it.copy(stereoWidth = (value * 1000).toInt())) }
-                }, enabled = connected, valueRange = 0f..1f)
+                Text("Bass Boost · ${(bassValue * 100).toInt()}%", color = StudioMuted)
+                Slider(value = bassValue, onValueChange = { bassValue = it },
+                    onValueChangeFinished = {
+                        config?.let { bridgeClient.apply(it.copy(bassStrength = (bassValue * 1000).toInt())) }
+                    }, enabled = connected, valueRange = 0f..1f)
+                Text("Stereo Width · ${(dashboardWidthValue * 100).toInt()}%", color = StudioMuted)
+                Slider(value = dashboardWidthValue, onValueChange = { dashboardWidthValue = it },
+                    onValueChangeFinished = {
+                        config?.let { bridgeClient.apply(it.copy(stereoWidth = (dashboardWidthValue * 1000).toInt())) }
+                    }, enabled = connected, valueRange = 0f..1f)
         config?.toDspSettings()?.let { snapshot ->
             Card(colors = CardDefaults.cardColors(containerColor = StudioPanel)) {
                 Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
