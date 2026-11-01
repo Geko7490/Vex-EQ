@@ -50,7 +50,7 @@ class AudioDspEngineTest {
         ).sanitized()
         assertEquals(31, settings.graphicGainsDb.size)
         assertEquals(12f, settings.graphicGainsDb.first(), 0f)
-        assertEquals(8, settings.parametricBands.size)
+        assertEquals(12, settings.parametricBands.size)
         assertEquals(20_000f, settings.parametricBands.first().frequencyHz, 0f)
         assertEquals(12f, settings.parametricBands.first().gainDb, 0f)
         assertEquals(10f, settings.parametricBands.first().q, 0f)
@@ -66,14 +66,12 @@ class AudioDspEngineTest {
         assertTrue(pcm.all { it.isFinite() })
     }
 
-    @Test fun performanceModesLimitParametricBandCount() {
-        val bands = List(8) { ParametricBand(frequencyHz = 100f + it * 100f, gainDb = 2f) }
-        assertEquals(2, DspSettings(parametricBands = bands, performanceMode = DspPerformanceMode.LOW)
-            .sanitized().parametricBands.size)
-        assertEquals(4, DspSettings(parametricBands = bands, performanceMode = DspPerformanceMode.MID)
-            .sanitized().parametricBands.size)
-        assertEquals(8, DspSettings(parametricBands = bands, performanceMode = DspPerformanceMode.HIGH)
-            .sanitized().parametricBands.size)
+    @Test fun allPerformanceModesRetainTheFullSixteenBandPeqCapacity() {
+        val bands = List(16) { ParametricBand(frequencyHz = 100f + it * 100f, gainDb = 2f) }
+        DspPerformanceMode.values().forEach { mode ->
+            assertEquals(16, DspSettings(parametricBands = bands, performanceMode = mode)
+                .sanitized().parametricBands.size)
+        }
     }
 
     @Test fun disabledEngineDoesNotApplyLimiterOrClipInput() {

@@ -28,6 +28,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.vexeq.bridge.VexPlayerBridgeClient
 import com.vexeq.bridge.VexPlayerBridgeState
 import com.vexeq.bridge.VexPlayerBridgeStatus
+import com.vexeq.visualizer.RtaSpectrumView
 import com.vexeq.visualizer.nextgen.NextGenSpectrumView
 
 private val AnalyzerPanel = Color(0xFF1C1B23)
@@ -43,6 +44,8 @@ fun SpectrumStudioScreen(
     val spectrumError by bridgeClient.spectrumError.collectAsState()
     var showBars by remember { mutableStateOf(true) }
     var showWave by remember { mutableStateOf(true) }
+    var showRta by remember { mutableStateOf(false) }
+    var peakHold by remember { mutableStateOf(true) }
 
     LaunchedEffect(bridgeState.status) {
         if (bridgeState.status == VexPlayerBridgeStatus.READY ||
@@ -81,19 +84,27 @@ fun SpectrumStudioScreen(
             }
         }
 
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             FilterChip(selected = showBars, onClick = { showBars = !showBars }, label = { Text("FFT Bars") })
             FilterChip(selected = showWave, onClick = { showWave = !showWave }, label = { Text("FFT Wave") })
+            FilterChip(selected = showRta, onClick = { showRta = !showRta }, label = { Text("RTA") })
+        }
+        if (showRta) {
+            FilterChip(selected = peakHold, onClick = { peakHold = !peakHold }, label = { Text("Peak Hold") })
         }
 
         Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF101014))) {
             Column(Modifier.fillMaxWidth().padding(8.dp)) {
-                if (frame.timestampNanos > 0L && (showBars || showWave)) {
-                    AndroidView(
-                        factory = { context -> NextGenSpectrumView(context) },
-                        modifier = Modifier.fillMaxWidth().height(280.dp),
-                        update = { it.submitFrame(frame, showBars, showWave) }
-                    )
+                if (frame.timestampNanos > 0L && (showBars || showWave || showRta)) {
+                    if (showRta) {
+                        RtaSpectrumView(frame = frame, peakHoldEnabled = peakHold)
+                    } else {
+                        AndroidView(
+                            factory = { context -> NextGenSpectrumView(context) },
+                            modifier = Modifier.fillMaxWidth().height(280.dp),
+                            update = { it.submitFrame(frame, showBars, showWave) }
+                        )
+                    }
                 } else {
                     Column(
                         Modifier.fillMaxWidth().height(280.dp).padding(16.dp),
@@ -103,7 +114,7 @@ fun SpectrumStudioScreen(
                             when {
                                 bridgeState.status !in setOf(VexPlayerBridgeStatus.READY, VexPlayerBridgeStatus.CONNECTED) ->
                                     "Waiting for VEXPlayer connection"
-                                !showBars && !showWave -> "Enable at least one visual layer"
+                                !showBars && !showWave && !showRta -> "Enable at least one visual layer"
                                 spectrumError != null -> spectrumError!!
                                 else -> "Play a track in VEXPlayer to start the analyzer"
                             },
@@ -125,7 +136,7 @@ fun SpectrumStudioScreen(
                 }
                 Spacer(Modifier.height(2.dp))
                 Text(
-                    "FFT Bars and FFT Wave are adapted from jeffshee/NextGenVisualizer. Analysis frames are streamed from VEXPlayer; this renderer does not create a second audio processor.",
+                    "FFT Bars/Wave use the adapted NextGenVisualizer renderer. RTA and Peak Hold use the same live VEXPlayer analysis frames; no second audio processor or capture path is created.",
                     color = AnalyzerMuted,
                     style = MaterialTheme.typography.bodySmall
                 )
