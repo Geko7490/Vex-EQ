@@ -88,6 +88,7 @@ class VexPlayerBridgeClient(context: Context) {
         override fun onBindingDied(name: ComponentName?) {
             spectrumSubscribed = false
             mutableSpectrumFrame.value = BridgeSpectrumFrame()
+            mutableSpectrumError.value = null
             serviceMessenger = null
             mutableState.value = mutableState.value.copy(
                 status = VexPlayerBridgeStatus.ERROR,
@@ -98,6 +99,7 @@ class VexPlayerBridgeClient(context: Context) {
         override fun onNullBinding(name: ComponentName?) {
             spectrumSubscribed = false
             mutableSpectrumFrame.value = BridgeSpectrumFrame()
+            mutableSpectrumError.value = null
             serviceMessenger = null
             mutableState.value = mutableState.value.copy(
                 status = VexPlayerBridgeStatus.ERROR,
