@@ -79,9 +79,9 @@ The bridge exposes bounded spectrum frames independently of the PCM/DSP path:
 
 A frame contains 64 normalized logarithmic magnitudes, 64 peak values, up to 160 waveform samples, bass/mid/treble energy, beat pulse, RMS and a monotonic timestamp. The host targets no more than 15 frames per second. The client bounds array sizes and sanitizes non-finite values before rendering.
 
-The host reuses its existing visualizer capture with consumer leases. VEX EQ must not create a second `android.media.audiofx.Visualizer`, feed analysis frames into the PCM chain, or fall back to microphone/system-loopback capture. If capture is unavailable, show the host-provided error state.
+The host reuses its existing visualizer capture with consumer leases for mono spectrum data, plus a read-only tap on VEXPlayer's existing post-DSP stereo PCM output for channel-separated analysis. VEX EQ must not create a second visualizer or another playback processor. The mono visualizer subscription currently requires VEXPlayer's audio-visualization permission; if capture is unavailable, show the host-provided error state.
 
-**Stereo/phase limitation:** the current spectrum contract is mono-analysis data. It does not contain separate left/right samples, channel correlation, or phase measurements. VEX EQ must not display fabricated stereo meters or phase correlation. Those require a future host protocol extension backed by channel-separated analysis from VEXPlayer.
+Stereo measurements are calculated from actual playback left/right PCM after VEXPlayer DSP and linked limiting. They do not modify the playback samples.
 
 ## Optional stereo-analysis extension (backward compatible v2 keys)
 
@@ -92,10 +92,11 @@ The VEX EQ client accepts these optional spectrum Bundle fields without requirin
 | `spectrumLeftMagnitudes` | float[64] | Normalized logarithmic left-channel FFT magnitudes |
 | `spectrumRightMagnitudes` | float[64] | Normalized logarithmic right-channel FFT magnitudes |
 | `spectrumPhaseCorrelation` | finite float [-1, 1] | Wideband L/R normalized cross-correlation |
+| `spectrumStereoWidth` | finite float [0, 1] | Side RMS / (Mid RMS + Side RMS); 0 = mono, 1 = side-only |
 
 If the host omits either channel array, the UI reports stereo analysis as unavailable. It must never duplicate the mono spectrum and label it as L/R. Phase correlation is shown only when the host supplies a finite value. Interpret +1 as in-phase, 0 as uncorrelated, and -1 as inverted; it is a wideband correlation indicator, not a frequency-dependent phase response.
 
-The VEXPlayer host must calculate these values from the actual left and right playback channels before emitting the optional keys. Until that host-side implementation and device validation exist, these panels remain explicitly unavailable. No microphone, loopback, or second DSP processor is permitted.
+The VEXPlayer host calculates these values from actual left/right playback channels after its DSP and linked limiter. The width value is an energy-share index, not a guarantee of perceived stereo width. If a host omits an optional key, VEX EQ must show that measurement as unavailable rather than inventing a value.
 
 ## Failure and release validation
 
