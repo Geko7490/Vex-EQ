@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 import com.vexeq.dsp.AudioDspEngine
 import com.vexeq.dsp.ParametricBand
+import com.vexeq.dsp.ParametricFilterType
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.exp
@@ -168,45 +169,84 @@ internal object EqCurveMath {
             AudioDspEngine.BAND_FREQUENCIES.forEachIndexed { bandIndex, center ->
                 response += bandResponseDb(frequency, center.toDouble(), graphic[bandIndex].toDouble(), GRAPHIC_Q)
             }
-            parametricBands.forEach { band ->
-                response += bandResponseDb(
-                    frequency,
-                    band.frequencyHz.coerceIn(20f, 20_000f).toDouble(),
-                    band.gainDb.coerceIn(-12f, 12f).toDouble(),
-                    band.q.coerceIn(0.3f, 10f).toDouble()
-                )
+            parametricBands.filter { it.enabled }.forEach { band ->
+                response += parametricResponseDb(frequency, band)
             }
             response.toFloat().coerceIn(-36f, 36f)
         }
     }
 
-    private fun bandResponseDb(frequency: Double, centerHz: Double, gainDb: Double, q: Double): Double {
-        if (kotlin.math.abs(gainDb) < 0.0001 || centerHz >= SAMPLE_RATE * 0.48) return 0.0
-        val a = 10.0.pow(gainDb / 40.0)
-        val omega = 2.0 * PI * centerHz / SAMPLE_RATE
-        val alpha = sin(omega) / (2.0 * q)
-        val cosOmega = cos(omega)
-        val a0 = 1.0 + alpha / a
-        val b0 = (1.0 + alpha * a) / a0
-        val b1 = (-2.0 * cosOmega) / a0
-        val b2 = (1.0 - alpha * a) / a0
-        val a1 = (-2.0 * cosOmega) / a0
-        val a2 = (1.0 - alpha / a) / a0
+    private data class CurveCoefficients(val b0: Double, val b1: Double, val b2: Double, val a1: Double, val a2: Double)
 
+    private fun parametricResponseDb(frequency: Double, band: ParametricBand): Double {
+        val center = band.frequencyHz.coerceIn(20f, 20_000f).toDouble()
+        if (center >= SAMPLE_RATE * 0.48) return 0.0
+        val q = band.q.coerceIn(0.3f, 10f).toDouble()
+        val gain = band.gainDb.coerceIn(-12f, 12f).toDouble()
+        val w0 = 2.0 * PI * center / SAMPLE_RATE
+        val c = cos(w0)
+        val sn = sin(w0)
+        val alpha = sn / (2.0 * q)
+        val coeff = when (band.filterType) {
+            ParametricFilterType.BELL -> {
+                if (kotlin.math.abs(gain) < 0.0001) return 0.0
+                val a = 10.0.pow(gain / 40.0)
+                val a0 = 1.0 + alpha / a
+                CurveCoefficients((1.0 + alpha * a) / a0, (-2.0 * c) / a0,
+                    (1.0 - alpha * a) / a0, (-2.0 * c) / a0, (1.0 - alpha / a) / a0)
+            }
+            ParametricFilterType.NOTCH -> {
+                val a0 = 1.0 + alpha
+                CurveCoefficients(1.0 / a0, (-2.0 * c) / a0, 1.0 / a0,
+                    (-2.0 * c) / a0, (1.0 - alpha) / a0)
+            }
+            ParametricFilterType.HIGH_PASS -> {
+                val a0 = 1.0 + alpha
+                CurveCoefficients(((1.0 + c) * 0.5) / a0, (-(1.0 + c)) / a0,
+                    ((1.0 + c) * 0.5) / a0, (-2.0 * c) / a0, (1.0 - alpha) / a0)
+            }
+            ParametricFilterType.LOW_PASS -> {
+                val a0 = 1.0 + alpha
+                CurveCoefficients(((1.0 - c) * 0.5) / a0, (1.0 - c) / a0,
+                    ((1.0 - c) * 0.5) / a0, (-2.0 * c) / a0, (1.0 - alpha) / a0)
+            }
+            ParametricFilterType.LOW_SHELF, ParametricFilterType.HIGH_SHELF -> {
+                if (kotlin.math.abs(gain) < 0.0001) return 0.0
+                val a = 10.0.pow(gain / 40.0)
+                val slope = q.coerceIn(0.3, 1.0)
+                val shelfAlpha = sn * 0.5 * kotlin.math.sqrt((a + 1.0 / a) * (1.0 / slope - 1.0) + 2.0)
+                val beta = 2.0 * kotlin.math.sqrt(a) * shelfAlpha
+                val low = band.filterType == ParametricFilterType.LOW_SHELF
+                val b0: Double; val b1: Double; val b2: Double
+                val a0: Double; val a1: Double; val a2: Double
+                if (low) {
+                    b0 = a * ((a + 1.0) - (a - 1.0) * c + beta)
+                    b1 = 2.0 * a * ((a - 1.0) - (a + 1.0) * c)
+                    b2 = a * ((a + 1.0) - (a - 1.0) * c - beta)
+                    a0 = (a + 1.0) + (a - 1.0) * c + beta
+                    a1 = -2.0 * ((a - 1.0) + (a + 1.0) * c)
+                    a2 = (a + 1.0) + (a - 1.0) * c - beta
+                } else {
+                    b0 = a * ((a + 1.0) + (a - 1.0) * c + beta)
+                    b1 = -2.0 * a * ((a - 1.0) + (a + 1.0) * c)
+                    b2 = a * ((a + 1.0) + (a - 1.0) * c - beta)
+                    a0 = (a + 1.0) - (a - 1.0) * c + beta
+                    a1 = 2.0 * ((a - 1.0) - (a + 1.0) * c)
+                    a2 = (a + 1.0) - (a - 1.0) * c - beta
+                }
+                CurveCoefficients(b0 / a0, b1 / a0, b2 / a0, a1 / a0, a2 / a0)
+            }
+        }
         val w = 2.0 * PI * frequency / SAMPLE_RATE
-        val c1 = cos(w)
-        val s1 = sin(w)
-        val c2 = cos(2.0 * w)
-        val s2 = sin(2.0 * w)
-        val nr = b0 + b1 * c1 + b2 * c2
-        val ni = -b1 * s1 - b2 * s2
-        val dr = 1.0 + a1 * c1 + a2 * c2
-        val di = -a1 * s1 - a2 * s2
-        val numerator = sqrt(nr * nr + ni * ni)
-        val denominator = sqrt(dr * dr + di * di).coerceAtLeast(1e-12)
-        return 20.0 * log10((numerator / denominator).coerceAtLeast(1e-12))
+        val c1 = cos(w); val s1 = sin(w); val c2 = cos(2.0 * w); val s2 = sin(2.0 * w)
+        val nr = coeff.b0 + coeff.b1 * c1 + coeff.b2 * c2
+        val ni = -coeff.b1 * s1 - coeff.b2 * s2
+        val dr = 1.0 + coeff.a1 * c1 + coeff.a2 * c2
+        val di = -coeff.a1 * s1 - coeff.a2 * s2
+        return 20.0 * log10((sqrt(nr * nr + ni * ni) /
+            sqrt(dr * dr + di * di).coerceAtLeast(1e-12)).coerceAtLeast(1e-12))
     }
-}
+}}
 
 internal fun frequencyAt(x: Float, width: Float): Float {
     val fraction = (x / width.coerceAtLeast(1f)).coerceIn(0f, 1f)
