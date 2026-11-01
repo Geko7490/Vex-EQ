@@ -407,6 +407,14 @@ private fun EqualizerScreen(bridgeClient: VexPlayerBridgeClient, bridgeState: Ve
                             commitSettings(settings.copy(
                                 parametricBands = settings.parametricBands.filterIndexed { i, _ -> i != index }
                             ))
+                        },
+                        onDuplicate = {
+                            if (settings.parametricBands.size < AudioDspEngine.MAX_PARAMETRIC_BANDS) {
+                                val duplicate = band.copy(frequencyHz = (band.frequencyHz * 1.15f).coerceAtMost(20_000f))
+                                val updated = settings.parametricBands.toMutableList().apply { add(index + 1, duplicate) }
+                                commitSettings(settings.copy(parametricBands = updated))
+                                selectedParametricBand = index + 1
+                            }
                         }
                     )
                 }
@@ -486,18 +494,53 @@ private fun ParametricBandCard(
     index: Int,
     band: ParametricBand,
     onChange: (ParametricBand) -> Unit,
-    onRemove: () -> Unit
+    onRemove: () -> Unit,
+    onDuplicate: () -> Unit = {}
 ) {
     val minLog = ln(20f)
     val maxLog = ln(20_000f)
     val normalizedFrequency = ((ln(band.frequencyHz.coerceIn(20f, 20_000f)) - minLog) /
         (maxLog - minLog)).coerceIn(0f, 1f)
     Card(colors = CardDefaults.cardColors(containerColor = VexBackground)) {
-        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("Band ${index + 1}", modifier = Modifier.weight(1f),
+                Text("Band ${index + 1} · Bell", modifier = Modifier.weight(1f),
                     style = MaterialTheme.typography.titleSmall)
+                TextButton(onClick = onDuplicate) { Text("Copy") }
                 TextButton(onClick = onRemove) { Text("Remove") }
+            }
+            Text("MANUAL VALUES", color = VexTextMuted, style = MaterialTheme.typography.labelSmall)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                OutlinedTextField(
+                    value = band.frequencyHz.toInt().toString(),
+                    onValueChange = { raw -> raw.toFloatOrNull()?.let {
+                        onChange(band.copy(frequencyHz = it.coerceIn(20f, 20_000f)))
+                    } },
+                    modifier = Modifier.weight(1.2f),
+                    label = { Text("Hz") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                )
+                OutlinedTextField(
+                    value = "%.1f".format(java.util.Locale.US, band.gainDb),
+                    onValueChange = { raw -> raw.toFloatOrNull()?.let {
+                        onChange(band.copy(gainDb = it.coerceIn(-12f, 12f)))
+                    } },
+                    modifier = Modifier.weight(1f),
+                    label = { Text("Gain dB") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+                )
+                OutlinedTextField(
+                    value = "%.2f".format(java.util.Locale.US, band.q),
+                    onValueChange = { raw -> raw.toFloatOrNull()?.let {
+                        onChange(band.copy(q = it.coerceIn(0.3f, 10f)))
+                    } },
+                    modifier = Modifier.weight(0.9f),
+                    label = { Text("Q") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+                )
             }
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text("Frequency", modifier = Modifier.weight(1f), color = VexTextMuted)
@@ -514,7 +557,7 @@ private fun ParametricBandCard(
             Slider(value = band.gainDb, onValueChange = { onChange(band.copy(gainDb = it)) },
                 valueRange = -12f..12f)
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("Q", modifier = Modifier.weight(1f), color = VexTextMuted)
+                Text("Q Factor", modifier = Modifier.weight(1f), color = VexTextMuted)
                 Text("%.2f".format(band.q), color = VexPurple)
             }
             Slider(value = band.q, onValueChange = { onChange(band.copy(q = it)) },
