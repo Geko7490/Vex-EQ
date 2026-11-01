@@ -72,12 +72,17 @@ private fun VexEqHome() {
         Text("VEX EQ", color = VexPurple, fontSize = 30.sp, style = MaterialTheme.typography.headlineLarge)
         Text("PRECISION AUDIO CONTROL", color = VexTextMuted, style = MaterialTheme.typography.labelMedium)
         Spacer(Modifier.height(14.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { selectedTab = 0 }, modifier = Modifier.weight(1f)) { Text("Equalizer") }
-            Button(onClick = { selectedTab = 1 }, modifier = Modifier.weight(1f)) { Text("Compatibility") }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Button(onClick = { selectedTab = 0 }, modifier = Modifier.weight(1f)) { Text("EQ") }
+            Button(onClick = { selectedTab = 1 }, modifier = Modifier.weight(1f)) { Text("Analyzer") }
+            Button(onClick = { selectedTab = 2 }, modifier = Modifier.weight(1f)) { Text("System") }
         }
         Spacer(Modifier.height(10.dp))
-        if (selectedTab == 0) EqualizerScreen(bridgeClient, bridgeState) else CompatibilityScreen()
+        when (selectedTab) {
+            0 -> EqualizerScreen(bridgeClient, bridgeState)
+            1 -> SpectrumStudioScreen(bridgeClient, bridgeState)
+            else -> CompatibilityScreen()
+        }
     }
 }
 
