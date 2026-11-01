@@ -46,6 +46,32 @@ class VexPlayerBridgeConfigTest {
         assertFalse(valid.copy(parametricBands = listOf(BridgeParametricBand(1_000, 1_201, 1f))).isValid())
     }
 
+    @Test fun roundTripsHostSnapshotWithoutDroppingPeqBands() {
+        val original = DspSettings(
+            enabled = true,
+            graphicGainsDb = List(31) { index -> (index - 15) / 2f },
+            parametricBands = List(8) { index ->
+                ParametricBand((100 + index * 500).toFloat(), (index - 4) / 2f, 0.8f + index / 10f)
+            },
+            bassBoost = 0.72f,
+            stereoWidth = 0.35f,
+            preampDb = -2.5f,
+            autoHeadroom = false,
+            limiterEnabled = true,
+            performanceMode = DspPerformanceMode.LOW
+        )
+        val payload = VexPlayerBridgeConfig.fromDspSettings(original)
+        assertEquals(8, payload.parametricBands.size)
+
+        val restored = payload.toDspSettings(DspPerformanceMode.LOW)!!
+        assertEquals(DspPerformanceMode.LOW, restored.performanceMode)
+        assertEquals(8, restored.parametricBands.size)
+        assertEquals(original.graphicGainsDb, restored.graphicGainsDb)
+        assertEquals(original.bassBoost, restored.bassBoost, 0.001f)
+        assertEquals(original.stereoWidth, restored.stereoWidth, 0.001f)
+        assertEquals(original.preampDb, restored.preampDb, 0.001f)
+    }
+
     @Test fun sanitizesSettingsBeforeBuildingBridgePayload() {
         val config = VexPlayerBridgeConfig.fromDspSettings(
             DspSettings(
