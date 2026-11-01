@@ -49,6 +49,10 @@ class MainActivity : ComponentActivity() {
             MaterialTheme(colorScheme = darkColorScheme(
                 primary = VexPurple, background = VexBackground, surface = VexPanel,
                 onBackground = Color(0xFFF5F3F8), onSurface = Color(0xFFF5F3F8)
+            ), shapes = Shapes(
+                small = RoundedCornerShape(3.dp),
+                medium = RoundedCornerShape(4.dp),
+                large = RoundedCornerShape(6.dp)
             )) {
                 Surface(Modifier.fillMaxSize(), color = VexBackground) { VexEqHome() }
             }
