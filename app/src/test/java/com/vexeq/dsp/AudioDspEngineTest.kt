@@ -75,4 +75,12 @@ class AudioDspEngineTest {
         assertEquals(8, DspSettings(parametricBands = bands, performanceMode = DspPerformanceMode.HIGH)
             .sanitized().parametricBands.size)
     }
+
+    @Test fun disabledEngineDoesNotApplyLimiterOrClipInput() {
+        val input = floatArrayOf(1.2f, -1.15f, 0.99f, -0.99f)
+        val output = FloatArray(input.size)
+        val engine = AudioDspEngine(48_000, 2, DspSettings(enabled = false, limiterEnabled = true))
+        assertTrue(engine.process(input, output, 2))
+        input.indices.forEach { assertEquals(input[it], output[it], 0.000001f) }
+    }
 }
