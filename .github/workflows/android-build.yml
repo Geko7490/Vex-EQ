@@ -1,0 +1,62 @@
+name: VEX EQ Android CI
+on:
+  push:
+    branches: [main, 'feature/**']
+    paths: ["app/**", "*.gradle.kts", "gradle.properties", ".github/workflows/android-build.yml"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: vex-eq-android-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+        name: Checkout
+      - uses: actions/setup-java@v5
+        name: Set up JDK 17
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v5
+        name: Set up Gradle
+        with:
+          gradle-version: "8.13"
+      - name: Install Android SDK 36
+        run: |
+          SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          SDKMANAGER=$(find "$SDK_ROOT/cmdline-tools" -name sdkmanager -type f | head -n 1)
+          test -n "$SDKMANAGER"
+          yes | "$SDKMANAGER" --sdk_root="$SDK_ROOT" --licenses >/dev/null || true
+          "$SDKMANAGER" --sdk_root="$SDK_ROOT" "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+      - name: Android lint
+        run: gradle lintDebug --stacktrace --no-daemon
+      - name: Unit tests
+        run: gradle testDebugUnitTest --stacktrace --no-daemon
+      - name: Build APK and AAB
+        run: gradle assembleDebug assembleRelease bundleRelease --stacktrace --no-daemon
+      - name: Upload APK and AAB
+        uses: actions/upload-artifact@v6
+        with:
+          name: VEX-EQ-Android
+          path: |
+            app/build/outputs/apk/debug/*.apk
+            app/build/outputs/apk/release/*.apk
+            app/build/outputs/bundle/release/*.aab
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: VEX-EQ-test-reports
+          path: |
+            app/build/reports/tests/testDebugUnitTest
+            app/build/reports/lint-results-debug.html
+          if-no-files-found: ignore
+          retention-days: 7
