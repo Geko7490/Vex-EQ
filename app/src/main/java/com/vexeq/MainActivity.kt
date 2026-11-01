@@ -81,11 +81,11 @@ private fun EqualizerScreen() {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text("Master EQ", style = MaterialTheme.typography.titleLarge)
-                        Text(if (settings.enabled) "DSP enabled" else "DSP bypassed", color = VexTextMuted)
+                        Text(if (settings.enabled) "DSP profile: enabled" else "DSP profile: bypass", color = VexTextMuted)
                     }
                     Switch(checked = settings.enabled, onCheckedChange = { settings = settings.copy(enabled = it) })
                 }
-                Text("DSP engine initialized · PCM host integration is the next stage",
+                Text("Configuration preview only · no audio stream is connected yet. Playback-host integration is the next stage.",
                     color = VexTextMuted, style = MaterialTheme.typography.bodySmall)
             }
         }
