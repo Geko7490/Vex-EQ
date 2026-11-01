@@ -33,7 +33,7 @@ class NextGenSpectrumView(context: Context) : View(context) {
         ampR = 72f
     )
 
-    private var frame = BridgeSpectrumFrame()
+    private var currentFrame = BridgeSpectrumFrame()
     private var showBars = true
     private var showWave = true
 
@@ -43,7 +43,7 @@ class NextGenSpectrumView(context: Context) : View(context) {
     }
 
     fun submitFrame(frame: BridgeSpectrumFrame, bars: Boolean, wave: Boolean) {
-        this.frame = frame
+        this.currentFrame = frame
         showBars = bars
         showWave = wave
         invalidate()
@@ -51,14 +51,14 @@ class NextGenSpectrumView(context: Context) : View(context) {
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        if (frame.magnitudes.isEmpty()) return
+        if (currentFrame.magnitudes.isEmpty()) return
         if (showBars) {
-            bars.calc(frame)
-            bars.draw(canvas, frame)
+            bars.calc(currentFrame)
+            bars.draw(canvas, currentFrame)
         }
         if (showWave) {
-            wave.calc(frame)
-            wave.draw(canvas, frame)
+            wave.calc(currentFrame)
+            wave.draw(canvas, currentFrame)
         }
     }
 }
