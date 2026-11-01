@@ -74,7 +74,7 @@ Reject unknown protocol versions and malformed payloads. Do not silently truncat
 - The host returns an acknowledgement containing `accepted`, `hostRevision`, and the sanitized applied snapshot.
 - Host-originated edits (including changes made in VEXPlayer's normal EQ screen) are sent to registered clients with the new `hostRevision`.
 - VEX EQ must update its UI from the acknowledged/host snapshot rather than assuming its requested values were applied.
-- Use monotonically increasing revisions. Reject stale client revisions; never resolve conflicts by last-arrival-wins without revision checks.
+- Use monotonically increasing host revisions. Every apply request includes `clientRevision`, which must equal the latest host revision. Reject stale client revisions; never resolve conflicts by last-arrival-wins without revision checks.
 - Disconnecting VEX EQ must not disable EQ, reset settings, or stop playback. VEXPlayer continues using its own last saved state.
 - If the client reconnects, it first fetches host state and then reconciles. It must not blindly overwrite host state with an old local preset.
 
@@ -109,8 +109,8 @@ Reject unknown protocol versions and malformed payloads. Do not silently truncat
 
 ## Implementation order
 
-1. Agree on release signing-certificate strategy for both apps.
-2. Implement and test the host Binder service in VEXPlayer.
-3. Add the VEX EQ client and connection state UI.
-4. Add bidirectional state callbacks and revision conflict tests.
+1. Confirm the shared release signing-certificate strategy for both apps.
+2. Review the VEXPlayer host service and VEX EQ Messenger client feature branches.
+3. Complete signing configuration and same-certificate install tests.
+4. Add instrumented IPC, revision-conflict and process-death tests.
 5. Run on-device audio tests with VEXPlayer playing, including disconnect/reconnect.
