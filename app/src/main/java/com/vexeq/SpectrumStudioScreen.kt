@@ -133,7 +133,7 @@ fun SpectrumStudioScreen(
 private fun EnergyValue(label: String, value: Float) {
     Column {
         Text(label, color = AnalyzerMuted, style = MaterialTheme.typography.labelSmall)
-        Text("\${(value.coerceIn(0f, 1f) * 100).toInt()}%", color = AnalyzerPurple,
+        Text("${(value.coerceIn(0f, 1f) * 100).toInt()}%", color = AnalyzerPurple,
             style = MaterialTheme.typography.titleMedium)
     }
 }
