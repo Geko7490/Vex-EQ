@@ -72,8 +72,7 @@ jobs:
           APK="app/build/outputs/apk/release/app-release.apk"
           if [[ -s "$RUNNER_TEMP/vex-eq-release.jks" ]]; then
             test -s "$APK"
-            "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose "$APK"
-            keytool -printcert -jarfile "$APK"
+            "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs --verbose "$APK"
             echo "VEX EQ release APK signature verified."
           else
             echo "Shared keystore was not configured; this release is unsigned."
