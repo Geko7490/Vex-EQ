@@ -153,6 +153,8 @@ fun SpectrumStudioScreen(
             }
         }
 
+        StereoPhaseCard(frame)
+
         Card(colors = CardDefaults.cardColors(containerColor = AnalyzerPanel)) {
             Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("FREQUENCY ENERGY", style = MaterialTheme.typography.labelLarge)
@@ -179,5 +181,86 @@ private fun EnergyValue(label: String, value: Float) {
         Text(label, color = AnalyzerMuted, style = MaterialTheme.typography.labelSmall)
         Text("${(value.coerceIn(0f, 1f) * 100).toInt()}%", color = AnalyzerPurple,
             style = MaterialTheme.typography.titleMedium)
+    }
+}
+
+
+@Composable
+private fun StereoPhaseCard(frame: com.vexeq.bridge.BridgeSpectrumFrame) {
+    val hasStereo = frame.leftMagnitudes.size == 64 && frame.rightMagnitudes.size == 64
+    Card(colors = CardDefaults.cardColors(containerColor = AnalyzerPanel)) {
+        Column(
+            Modifier.fillMaxWidth().padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text("STEREO & PHASE STUDIO", color = AnalyzerPurple, style = MaterialTheme.typography.labelLarge)
+            if (hasStereo) {
+                Canvas(Modifier.fillMaxWidth().height(104.dp)) {
+                    val leftPath = Path()
+                    val rightPath = Path()
+                    frame.leftMagnitudes.forEachIndexed { index, value ->
+                        val x = size.width * index / 63f
+                        val y = size.height * (1f - value.coerceIn(0f, 1f)) * 0.48f
+                        if (index == 0) leftPath.moveTo(x, y) else leftPath.lineTo(x, y)
+                    }
+                    frame.rightMagnitudes.forEachIndexed { index, value ->
+                        val x = size.width * index / 63f
+                        val y = size.height * (0.52f + value.coerceIn(0f, 1f) * 0.48f)
+                        if (index == 0) rightPath.moveTo(x, y) else rightPath.lineTo(x, y)
+                    }
+                    drawLine(Color(0xFF302C38), Offset(0f, size.height / 2f), Offset(size.width, size.height / 2f), 1f)
+                    drawPath(leftPath, Color(0xFFA855F7), style = Stroke(width = 2f))
+                    drawPath(rightPath, Color(0xFF38C8D8), style = Stroke(width = 2f))
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("LEFT", color = AnalyzerPurple, style = MaterialTheme.typography.labelSmall)
+                    Text("RIGHT", color = Color(0xFF38C8D8), style = MaterialTheme.typography.labelSmall)
+                }
+            } else {
+                Text(
+                    "Waiting for channel-separated FFT data from VEXPlayer. Mono spectrum is not duplicated or presented as stereo.",
+                    color = AnalyzerMuted,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+            val correlation = frame.phaseCorrelation
+            if (correlation != null) {
+                Text(
+                    "PHASE CORRELATION  \${if (correlation > 0.05f) "+" else ""}\${"%.2f".format(correlation)}",
+                    color = AnalyzerMuted,
+                    style = MaterialTheme.typography.labelMedium
+                )
+                Canvas(Modifier.fillMaxWidth().height(18.dp)) {
+                    val center = size.width / 2f
+                    drawLine(Color(0xFF48424F), Offset(0f, size.height / 2f), Offset(size.width, size.height / 2f), 4f)
+                    drawLine(
+                        when {
+                            correlation < -0.25f -> Color(0xFFFF6B6B)
+                            correlation > 0.25f -> Color(0xFF6DD6A5)
+                            else -> Color(0xFFFFB86B)
+                        },
+                        Offset(center, size.height / 2f),
+                        Offset(center + correlation * center, size.height / 2f),
+                        6f
+                    )
+                    drawLine(Color.White, Offset(center, 1f), Offset(center, size.height - 1f), 1f)
+                }
+                Text(
+                    when {
+                        correlation < -0.25f -> "Potential phase cancellation · check mono compatibility"
+                        correlation > 0.25f -> "Channels are positively correlated"
+                        else -> "Low correlation · inspect stereo content"
+                    },
+                    color = AnalyzerMuted,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            } else {
+                Text(
+                    "Phase correlation unavailable · requires host-side L/R channel analysis.",
+                    color = AnalyzerMuted,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+        }
     }
 }
