@@ -121,6 +121,7 @@ private fun EqualizerScreen(bridgeClient: VexPlayerBridgeClient, bridgeState: Ve
     }
     var settings by remember { mutableStateOf(presetStore.loadLastSettings()) }
     var advancedStudio by remember { mutableStateOf(false) }
+    var selectedParametricBand by remember { mutableIntStateOf(-1) }
     val engine = remember { AudioDspEngine(48_000, 2, settings) }
     LaunchedEffect(bridgeState.config, bridgeState.status) {
         if (bridgeState.status == VexPlayerBridgeStatus.CONNECTED) {
@@ -308,7 +309,16 @@ private fun EqualizerScreen(bridgeClient: VexPlayerBridgeClient, bridgeState: Ve
             Text("Shape the combined response curve, then fine-tune each filter below.", color = VexTextMuted, style = MaterialTheme.typography.bodySmall)
         EqResponseCurve(
             graphicGainsDb = settings.graphicGainsDb,
-            parametricBands = settings.parametricBands
+            parametricBands = settings.parametricBands,
+            selectedBandIndex = selectedParametricBand,
+            onSelectBand = { selectedParametricBand = it },
+            onBandChange = { index, changed ->
+                val updated = settings.parametricBands.toMutableList()
+                if (index in updated.indices) {
+                    updated[index] = changed
+                    settings = settings.copy(parametricBands = updated)
+                }
+            }
         )
 
         Card(colors = CardDefaults.cardColors(containerColor = VexPanel)) {
@@ -324,6 +334,7 @@ private fun EqualizerScreen(bridgeClient: VexPlayerBridgeClient, bridgeState: Ve
                             settings = settings.copy(
                                 parametricBands = settings.parametricBands + ParametricBand()
                             )
+                            selectedParametricBand = settings.parametricBands.lastIndex
                         },
                         enabled = settings.parametricBands.size < AudioDspEngine.MAX_PARAMETRIC_BANDS
                     ) { Text("Add band") }
