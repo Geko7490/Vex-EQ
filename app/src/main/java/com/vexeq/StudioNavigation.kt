@@ -31,6 +31,7 @@ import com.vexeq.bridge.VexPlayerBridgeState
 import com.vexeq.bridge.VexPlayerBridgeStatus
 import com.vexeq.dsp.DspSettings
 import com.vexeq.dsp.PresetStore
+import com.vexeq.ui.EqResponseCurve
 
 private val StudioPanel = Color(0xFF1B1A22)
 private val StudioPurple = Color(0xFFA855F7)
@@ -109,6 +110,17 @@ fun HomeDashboardScreen(
                 Slider(value = width, onValueChange = { value ->
                     config?.let { bridgeClient.apply(it.copy(stereoWidth = (value * 1000).toInt())) }
                 }, enabled = connected, valueRange = 0f..1f)
+        config?.toDspSettings()?.let { snapshot ->
+            Card(colors = CardDefaults.cardColors(containerColor = StudioPanel)) {
+                Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("LIVE EQ RESPONSE", color = StudioPurple, style = MaterialTheme.typography.labelLarge)
+                    EqResponseCurve(
+                        graphicGainsDb = snapshot.graphicGainsDb,
+                        parametricBands = snapshot.parametricBands
+                    )
+                }
+            }
+        }
             }
         }
     }
