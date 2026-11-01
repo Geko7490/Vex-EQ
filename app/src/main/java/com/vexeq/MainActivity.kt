@@ -18,8 +18,11 @@ import com.vexeq.compat.CompatibilityEngine
 import com.vexeq.compat.CompatibilityReport
 import com.vexeq.dsp.AudioDspEngine
 import com.vexeq.dsp.DspSettings
+import com.vexeq.dsp.ParametricBand
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlin.math.exp
+import kotlin.math.ln
 import kotlinx.coroutines.withContext
 
 private val VexPurple = Color(0xFFA855F7)
@@ -61,7 +64,7 @@ private fun VexEqHome() {
 private fun EqualizerScreen() {
     var settings by remember { mutableStateOf(DspSettings()) }
     val engine = remember { AudioDspEngine(48_000, 2, settings) }
-    LaunchedEffect(settings) { engine.update(settings) }
+    LaunchedEffect(settings) { withContext(Dispatchers.Default) { engine.update(settings) } }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -97,6 +100,42 @@ private fun EqualizerScreen() {
         }
 
         Card(colors = CardDefaults.cardColors(containerColor = VexPanel)) {
+            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Parametric EQ", style = MaterialTheme.typography.titleLarge)
+                        Text("${settings.parametricBands.size}/8 bands", color = VexTextMuted,
+                            style = MaterialTheme.typography.bodySmall)
+                    }
+                    Button(
+                        onClick = {
+                            settings = settings.copy(
+                                parametricBands = settings.parametricBands + ParametricBand()
+                            )
+                        },
+                        enabled = settings.parametricBands.size < AudioDspEngine.MAX_PARAMETRIC_BANDS
+                    ) { Text("Add band") }
+                }
+                settings.parametricBands.forEachIndexed { index, band ->
+                    ParametricBandCard(
+                        index = index,
+                        band = band,
+                        onChange = { changed ->
+                            val updated = settings.parametricBands.toMutableList()
+                            updated[index] = changed
+                            settings = settings.copy(parametricBands = updated)
+                        },
+                        onRemove = {
+                            settings = settings.copy(
+                                parametricBands = settings.parametricBands.filterIndexed { i, _ -> i != index }
+                            )
+                        }
+                    )
+                }
+            }
+        }
+
+        Card(colors = CardDefaults.cardColors(containerColor = VexPanel)) {
             Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text("31-Band Graphic EQ", style = MaterialTheme.typography.titleLarge)
                 Text("Adjust each center frequency from -12 dB to +12 dB", color = VexTextMuted,
@@ -126,6 +165,49 @@ private fun EqualizerScreen() {
         Text("These controls configure VEX EQ's PCM DSP core. They do not yet modify system audio or VEXPlayer playback; that requires playback-host integration and device compatibility checks.",
             color = VexTextMuted, style = MaterialTheme.typography.bodySmall)
         Spacer(Modifier.height(20.dp))
+    }
+}
+
+
+@Composable
+private fun ParametricBandCard(
+    index: Int,
+    band: ParametricBand,
+    onChange: (ParametricBand) -> Unit,
+    onRemove: () -> Unit
+) {
+    val minLog = ln(20f)
+    val maxLog = ln(20_000f)
+    val normalizedFrequency = ((ln(band.frequencyHz.coerceIn(20f, 20_000f)) - minLog) /
+        (maxLog - minLog)).coerceIn(0f, 1f)
+    Card(colors = CardDefaults.cardColors(containerColor = VexBackground)) {
+        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("Band ${index + 1}", modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.titleSmall)
+                TextButton(onClick = onRemove) { Text("Remove") }
+            }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("Frequency", modifier = Modifier.weight(1f), color = VexTextMuted)
+                Text("${band.frequencyHz.toInt()} Hz", color = VexPurple)
+            }
+            Slider(value = normalizedFrequency, onValueChange = {
+                val hz = exp(minLog + (maxLog - minLog) * it)
+                onChange(band.copy(frequencyHz = hz))
+            }, valueRange = 0f..1f)
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("Gain", modifier = Modifier.weight(1f), color = VexTextMuted)
+                Text("%+.1f dB".format(band.gainDb), color = VexPurple)
+            }
+            Slider(value = band.gainDb, onValueChange = { onChange(band.copy(gainDb = it)) },
+                valueRange = -12f..12f)
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("Q", modifier = Modifier.weight(1f), color = VexTextMuted)
+                Text("%.2f".format(band.q), color = VexPurple)
+            }
+            Slider(value = band.q, onValueChange = { onChange(band.copy(q = it)) },
+                valueRange = 0.3f..10f)
+        }
     }
 }
 
