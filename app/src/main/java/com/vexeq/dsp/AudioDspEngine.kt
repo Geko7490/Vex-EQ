@@ -21,7 +21,7 @@ data class ParametricBand(
 /** Immutable user-facing DSP configuration. */
 data class DspSettings(
     val enabled: Boolean = false,
-    val graphicGainsDb: List<Float> = List(BAND_FREQUENCIES.size) { 0f },
+    val graphicGainsDb: List<Float> = List(AudioDspEngine.BAND_FREQUENCIES.size) { 0f },
     val parametricBands: List<ParametricBand> = emptyList(),
     val bassBoost: Float = 0f,
     val stereoWidth: Float = 0f,
@@ -30,7 +30,7 @@ data class DspSettings(
     val limiterEnabled: Boolean = true
 ) {
     fun sanitized(): DspSettings = copy(
-        graphicGainsDb = resampleGains(graphicGainsDb, BAND_FREQUENCIES.size)
+        graphicGainsDb = AudioDspEngine.resampleGains(graphicGainsDb, BAND_FREQUENCIES.size)
             .map { it.coerceIn(-12f, 12f) },
         parametricBands = parametricBands.take(MAX_PARAMETRIC_BANDS).map {
             it.copy(
