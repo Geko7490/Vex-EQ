@@ -5,6 +5,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.math.abs
+import kotlin.math.sin
 
 class AudioDspEngineTest {
     @Test fun flatDisabledEnginePassesPcmUnchanged() {
@@ -50,7 +51,7 @@ class AudioDspEngineTest {
         ).sanitized()
         assertEquals(31, settings.graphicGainsDb.size)
         assertEquals(12f, settings.graphicGainsDb.first(), 0f)
-        assertEquals(8, settings.parametricBands.size)
+        assertEquals(12, settings.parametricBands.size)
         assertEquals(20_000f, settings.parametricBands.first().frequencyHz, 0f)
         assertEquals(12f, settings.parametricBands.first().gainDb, 0f)
         assertEquals(10f, settings.parametricBands.first().q, 0f)
@@ -67,13 +68,38 @@ class AudioDspEngineTest {
     }
 
     @Test fun performanceModesLimitParametricBandCount() {
-        val bands = List(8) { ParametricBand(frequencyHz = 100f + it * 100f, gainDb = 2f) }
+        val bands = List(16) { ParametricBand(frequencyHz = 100f + it * 100f, gainDb = 2f) }
         assertEquals(2, DspSettings(parametricBands = bands, performanceMode = DspPerformanceMode.LOW)
             .sanitized().parametricBands.size)
         assertEquals(4, DspSettings(parametricBands = bands, performanceMode = DspPerformanceMode.MID)
             .sanitized().parametricBands.size)
-        assertEquals(8, DspSettings(parametricBands = bands, performanceMode = DspPerformanceMode.HIGH)
+        assertEquals(16, DspSettings(parametricBands = bands, performanceMode = DspPerformanceMode.HIGH)
             .sanitized().parametricBands.size)
+    }
+
+    @Test fun allParametricFilterTypesProduceFinitePcm() {
+        val bands = ParametricFilterType.values().mapIndexed { index, filter ->
+            ParametricBand(
+                frequencyHz = 120f * (index + 1),
+                gainDb = if (filter in setOf(
+                    ParametricFilterType.BELL,
+                    ParametricFilterType.LOW_SHELF,
+                    ParametricFilterType.HIGH_SHELF
+                )) 3f else 0f,
+                q = 0.8f,
+                filterType = filter
+            )
+        }
+        val input = FloatArray(8_192) { index ->
+            (0.25f * sin(2.0 * Math.PI * 440.0 * (index / 2 / 48_000.0))).toFloat()
+        }
+        val output = FloatArray(input.size)
+        val engine = AudioDspEngine(
+            48_000, 2,
+            DspSettings(enabled = true, parametricBands = bands, autoHeadroom = false)
+        )
+        assertTrue(engine.process(input, output, input.size / 2))
+        assertTrue("Every filter must keep output finite", output.all { it.isFinite() })
     }
 
     @Test fun disabledEngineDoesNotApplyLimiterOrClipInput() {

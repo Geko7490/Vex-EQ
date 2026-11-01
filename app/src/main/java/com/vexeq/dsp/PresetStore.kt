@@ -115,7 +115,8 @@ class PresetStore(context: Context) {
         put("parametricBands", JSONArray().apply {
             parametricBands.forEach { band ->
                 put(JSONObject().put("frequencyHz", band.frequencyHz)
-                    .put("gainDb", band.gainDb).put("q", band.q))
+                    .put("gainDb", band.gainDb).put("q", band.q)
+                    .put("filterType", band.filterType.name).put("enabled", band.enabled))
             }
         })
         put("bassBoost", bassBoost)
@@ -123,6 +124,12 @@ class PresetStore(context: Context) {
         put("preampDb", preampDb)
         put("autoHeadroom", autoHeadroom)
         put("limiterEnabled", limiterEnabled)
+        put("compressorEnabled", compressorEnabled)
+        put("compressorThresholdDb", compressorThresholdDb)
+        put("compressorRatio", compressorRatio)
+        put("compressorAttackMs", compressorAttackMs)
+        put("compressorReleaseMs", compressorReleaseMs)
+        put("softClipperEnabled", softClipperEnabled)
         put("performanceMode", performanceMode.name)
     }
 
@@ -138,7 +145,11 @@ class PresetStore(context: Context) {
                 add(ParametricBand(
                     frequencyHz = item.optDouble("frequencyHz", 1_000.0).toFloat(),
                     gainDb = item.optDouble("gainDb", 0.0).toFloat(),
-                    q = item.optDouble("q", 1.0).toFloat()
+                    q = item.optDouble("q", 1.0).toFloat(),
+                    filterType = runCatching {
+                        ParametricFilterType.valueOf(item.optString("filterType", "BELL"))
+                    }.getOrDefault(ParametricFilterType.BELL),
+                    enabled = item.optBoolean("enabled", true)
                 ))
             }
         }
@@ -154,6 +165,12 @@ class PresetStore(context: Context) {
             preampDb = optDouble("preampDb", 0.0).toFloat(),
             autoHeadroom = optBoolean("autoHeadroom", true),
             limiterEnabled = optBoolean("limiterEnabled", true),
+            compressorEnabled = optBoolean("compressorEnabled", false),
+            compressorThresholdDb = optDouble("compressorThresholdDb", -18.0).toFloat(),
+            compressorRatio = optDouble("compressorRatio", 4.0).toFloat(),
+            compressorAttackMs = optDouble("compressorAttackMs", 10.0).toFloat(),
+            compressorReleaseMs = optDouble("compressorReleaseMs", 120.0).toFloat(),
+            softClipperEnabled = optBoolean("softClipperEnabled", false),
             performanceMode = mode
         ).sanitized()
     }

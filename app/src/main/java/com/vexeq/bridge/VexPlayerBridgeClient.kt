@@ -20,6 +20,13 @@ data class BridgeSpectrumFrame(
     val magnitudes: FloatArray = FloatArray(0),
     val peaks: FloatArray = FloatArray(0),
     val waveform: FloatArray = FloatArray(0),
+    /** Optional channel-separated FFT data; null/empty means host has not implemented it. */
+    val leftMagnitudes: FloatArray = FloatArray(0),
+    val rightMagnitudes: FloatArray = FloatArray(0),
+    /** -1 = fully out of phase, 0 = uncorrelated, +1 = in phase. */
+    val phaseCorrelation: Float? = null,
+    /** Optional Mid/Side index: 0 = mono, 1 = side-only. */
+    val stereoWidth: Float? = null,
     val bass: Float = 0f,
     val mid: Float = 0f,
     val treble: Float = 0f,
@@ -175,11 +182,19 @@ class VexPlayerBridgeClient(context: Context) {
             putInt(KEY_PREAMP, config.preampMb)
             putBoolean(KEY_AUTO_HEADROOM, config.autoHeadroom)
             putBoolean(KEY_LIMITER, config.limiterEnabled)
+            putBoolean(KEY_COMPRESSOR_ENABLED, config.compressorEnabled)
+            putFloat(KEY_COMPRESSOR_THRESHOLD, config.compressorThresholdDb)
+            putFloat(KEY_COMPRESSOR_RATIO, config.compressorRatio)
+            putFloat(KEY_COMPRESSOR_ATTACK, config.compressorAttackMs)
+            putFloat(KEY_COMPRESSOR_RELEASE, config.compressorReleaseMs)
+            putBoolean(KEY_SOFT_CLIPPER_ENABLED, config.softClipperEnabled)
             putParcelableArrayList(KEY_PARAMETRIC_BANDS, ArrayList(config.parametricBands.map { band ->
                 Bundle().apply {
                     putInt(KEY_FREQUENCY, band.frequencyHz)
                     putInt(KEY_GAIN, band.gainMb)
                     putFloat(KEY_Q, band.q)
+                    putString(KEY_FILTER_TYPE, band.filterType)
+                    putBoolean(KEY_BAND_ENABLED, band.enabled)
                 }
             }))
         }
@@ -241,10 +256,26 @@ class VexPlayerBridgeClient(context: Context) {
             ?.map { if (it.isFinite()) it.coerceIn(0f, 1f) else 0f }?.toFloatArray() ?: FloatArray(0)
         val waveform = data.getFloatArray(KEY_SPECTRUM_WAVEFORM)?.take(SPECTRUM_WAVE_POINTS)
             ?.map { if (it.isFinite()) it.coerceIn(-1f, 1f) else 0f }?.toFloatArray() ?: FloatArray(0)
+        val leftMagnitudes = data.getFloatArray(KEY_SPECTRUM_LEFT_MAGNITUDES)
+            ?.take(SPECTRUM_BANDS)?.map { if (it.isFinite()) it.coerceIn(0f, 1f) else 0f }
+            ?.toFloatArray() ?: FloatArray(0)
+        val rightMagnitudes = data.getFloatArray(KEY_SPECTRUM_RIGHT_MAGNITUDES)
+            ?.take(SPECTRUM_BANDS)?.map { if (it.isFinite()) it.coerceIn(0f, 1f) else 0f }
+            ?.toFloatArray() ?: FloatArray(0)
+        val phaseCorrelation = if (data.containsKey(KEY_SPECTRUM_PHASE_CORRELATION)) {
+            data.getFloat(KEY_SPECTRUM_PHASE_CORRELATION).takeIf { it.isFinite() }?.coerceIn(-1f, 1f)
+        } else null
+        val stereoWidth = if (data.containsKey(KEY_SPECTRUM_STEREO_WIDTH)) {
+            data.getFloat(KEY_SPECTRUM_STEREO_WIDTH).takeIf { it.isFinite() }?.coerceIn(0f, 1f)
+        } else null
         mutableSpectrumFrame.value = BridgeSpectrumFrame(
             magnitudes = magnitudes,
             peaks = peaks,
             waveform = waveform,
+            leftMagnitudes = leftMagnitudes,
+            rightMagnitudes = rightMagnitudes,
+            phaseCorrelation = phaseCorrelation,
+            stereoWidth = stereoWidth,
             bass = data.getFloat(KEY_SPECTRUM_BASS).coerceIn(0f, 1f),
             mid = data.getFloat(KEY_SPECTRUM_MID).coerceIn(0f, 1f),
             treble = data.getFloat(KEY_SPECTRUM_TREBLE).coerceIn(0f, 1f),
@@ -277,7 +308,9 @@ class VexPlayerBridgeClient(context: Context) {
             BridgeParametricBand(
                 frequencyHz = it.getInt(KEY_FREQUENCY),
                 gainMb = it.getInt(KEY_GAIN),
-                q = it.getFloat(KEY_Q)
+                q = it.getFloat(KEY_Q),
+                filterType = it.getString(KEY_FILTER_TYPE) ?: "BELL",
+                enabled = it.getBoolean(KEY_BAND_ENABLED, true)
             )
         }
         VexPlayerBridgeConfig(
@@ -289,6 +322,12 @@ class VexPlayerBridgeClient(context: Context) {
             preampMb = data.getInt(KEY_PREAMP),
             autoHeadroom = data.getBoolean(KEY_AUTO_HEADROOM),
             limiterEnabled = data.getBoolean(KEY_LIMITER),
+            compressorEnabled = data.getBoolean(KEY_COMPRESSOR_ENABLED),
+            compressorThresholdDb = data.getFloat(KEY_COMPRESSOR_THRESHOLD, -18f),
+            compressorRatio = data.getFloat(KEY_COMPRESSOR_RATIO, 4f),
+            compressorAttackMs = data.getFloat(KEY_COMPRESSOR_ATTACK, 10f),
+            compressorReleaseMs = data.getFloat(KEY_COMPRESSOR_RELEASE, 120f),
+            softClipperEnabled = data.getBoolean(KEY_SOFT_CLIPPER_ENABLED),
             parametricBands = bands
         ).takeIf { it.isValid() }
     }.getOrNull()
@@ -315,7 +354,7 @@ class VexPlayerBridgeClient(context: Context) {
 
     companion object {
         private const val VEXPLAYER_PACKAGE = "com.vexmusic.player"
-        private const val PROTOCOL_VERSION = 1
+        private const val PROTOCOL_VERSION = 2
 
         private const val MSG_GET_PROTOCOL_INFO = 1
         private const val MSG_GET_CURRENT_STATE = 2
@@ -345,13 +384,26 @@ class VexPlayerBridgeClient(context: Context) {
         private const val KEY_PREAMP = "preampMb"
         private const val KEY_AUTO_HEADROOM = "autoHeadroom"
         private const val KEY_LIMITER = "limiterEnabled"
+        private const val KEY_COMPRESSOR_ENABLED = "compressorEnabled"
+        private const val KEY_COMPRESSOR_THRESHOLD = "compressorThresholdDb"
+        private const val KEY_COMPRESSOR_RATIO = "compressorRatio"
+        private const val KEY_COMPRESSOR_ATTACK = "compressorAttackMs"
+        private const val KEY_COMPRESSOR_RELEASE = "compressorReleaseMs"
+        private const val KEY_SOFT_CLIPPER_ENABLED = "softClipperEnabled"
         private const val KEY_PARAMETRIC_BANDS = "parametricBands"
         private const val KEY_FREQUENCY = "frequencyHz"
         private const val KEY_GAIN = "gainMb"
         private const val KEY_Q = "q"
+        private const val KEY_FILTER_TYPE = "filterType"
+        private const val KEY_BAND_ENABLED = "bandEnabled"
         private const val KEY_SPECTRUM_MAGNITUDES = "spectrumMagnitudes"
         private const val KEY_SPECTRUM_PEAKS = "spectrumPeaks"
         private const val KEY_SPECTRUM_WAVEFORM = "spectrumWaveform"
+        // Optional v2 extension: older VEXPlayer hosts simply omit these keys.
+        private const val KEY_SPECTRUM_LEFT_MAGNITUDES = "spectrumLeftMagnitudes"
+        private const val KEY_SPECTRUM_RIGHT_MAGNITUDES = "spectrumRightMagnitudes"
+        private const val KEY_SPECTRUM_PHASE_CORRELATION = "spectrumPhaseCorrelation"
+        private const val KEY_SPECTRUM_STEREO_WIDTH = "spectrumStereoWidth"
         private const val KEY_SPECTRUM_BASS = "spectrumBass"
         private const val KEY_SPECTRUM_MID = "spectrumMid"
         private const val KEY_SPECTRUM_TREBLE = "spectrumTreble"

@@ -3,6 +3,7 @@ package com.vexeq.bridge
 import com.vexeq.dsp.DspPerformanceMode
 import com.vexeq.dsp.DspSettings
 import com.vexeq.dsp.ParametricBand
+import com.vexeq.dsp.ParametricFilterType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -32,6 +33,32 @@ class VexPlayerBridgeConfigTest {
         assertEquals(-250, config.parametricBands.single().gainMb)
         assertEquals(1.4f, config.parametricBands.single().q, 0f)
         assertTrue(config.isValid())
+    }
+
+    @Test fun roundTripsDynamicsAndParametricFilterMetadata() {
+        val original = DspSettings(
+            enabled = true,
+            compressorEnabled = true,
+            compressorThresholdDb = -22f,
+            compressorRatio = 5.5f,
+            compressorAttackMs = 4f,
+            compressorReleaseMs = 180f,
+            softClipperEnabled = true,
+            parametricBands = listOf(
+                ParametricBand(120f, 3f, 0.8f, ParametricFilterType.LOW_SHELF, true),
+                ParametricBand(8_000f, 0f, 1.2f, ParametricFilterType.HIGH_PASS, false)
+            )
+        )
+        val payload = VexPlayerBridgeConfig.fromDspSettings(original)
+        assertTrue(payload.isValid())
+        val restored = payload.toDspSettings()!!
+        assertTrue(restored.compressorEnabled)
+        assertTrue(restored.softClipperEnabled)
+        assertEquals(-22f, restored.compressorThresholdDb, 0f)
+        assertEquals(5.5f, restored.compressorRatio, 0f)
+        assertEquals(ParametricFilterType.LOW_SHELF, restored.parametricBands[0].filterType)
+        assertEquals(ParametricFilterType.HIGH_PASS, restored.parametricBands[1].filterType)
+        assertFalse(restored.parametricBands[1].enabled)
     }
 
     @Test fun rejectsUnsupportedProtocolAndInvalidPayloadRanges() {

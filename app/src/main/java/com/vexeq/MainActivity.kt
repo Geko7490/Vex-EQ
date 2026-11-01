@@ -31,6 +31,7 @@ import com.vexeq.dsp.AudioDspEngine
 import com.vexeq.dsp.DspSettings
 import com.vexeq.dsp.DspPerformanceMode
 import com.vexeq.dsp.ParametricBand
+import com.vexeq.dsp.ParametricFilterType
 import com.vexeq.dsp.PresetStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -175,6 +176,7 @@ private fun EqualizerScreen(bridgeClient: VexPlayerBridgeClient, bridgeState: Ve
     }
     var advancedStudio by remember { mutableStateOf(false) }
     var selectedParametricBand by remember { mutableIntStateOf(-1) }
+    var bandGestureActive by remember { mutableStateOf(false) }
     val engine = remember { AudioDspEngine(48_000, 2, settings) }
     LaunchedEffect(bridgeState.config, bridgeState.status) {
         if (bridgeState.status == VexPlayerBridgeStatus.CONNECTED) {
@@ -389,13 +391,21 @@ private fun EqualizerScreen(bridgeClient: VexPlayerBridgeClient, bridgeState: Ve
             parametricBands = settings.parametricBands,
             selectedBandIndex = selectedParametricBand,
             onSelectBand = { selectedParametricBand = it },
+            onBandChangeStart = {
+                if (!bandGestureActive) {
+                    bandGestureActive = true
+                    undoStack = (undoStack + settings).takeLast(100)
+                    redoStack = emptyList()
+                }
+            },
             onBandChange = { index, changed ->
                 val updated = settings.parametricBands.toMutableList()
                 if (index in updated.indices) {
                     updated[index] = changed
-                    commitSettings(settings.copy(parametricBands = updated))
+                    settings = settings.copy(parametricBands = updated)
                 }
-            }
+            },
+            onBandChangeEnd = { bandGestureActive = false }
         )
 
         Card(colors = CardDefaults.cardColors(containerColor = VexPanel)) {
@@ -408,10 +418,11 @@ private fun EqualizerScreen(bridgeClient: VexPlayerBridgeClient, bridgeState: Ve
                     }
                     Button(
                         onClick = {
+                            val nextIndex = settings.parametricBands.size
                             commitSettings(settings.copy(
                                 parametricBands = settings.parametricBands + ParametricBand()
                             ))
-                            selectedParametricBand = settings.parametricBands.lastIndex
+                            selectedParametricBand = nextIndex
                         },
                         enabled = settings.parametricBands.size < AudioDspEngine.MAX_PARAMETRIC_BANDS
                     ) { Text("Add band") }
@@ -426,9 +437,14 @@ private fun EqualizerScreen(bridgeClient: VexPlayerBridgeClient, bridgeState: Ve
                             commitSettings(settings.copy(parametricBands = updated))
                         },
                         onRemove = {
-                            commitSettings(settings.copy(
-                                parametricBands = settings.parametricBands.filterIndexed { i, _ -> i != index }
-                            ))
+                            val remaining = settings.parametricBands.filterIndexed { i, _ -> i != index }
+                            commitSettings(settings.copy(parametricBands = remaining))
+                            selectedParametricBand = when {
+                                remaining.isEmpty() -> -1
+                                selectedParametricBand == index -> index.coerceAtMost(remaining.lastIndex)
+                                selectedParametricBand > index -> selectedParametricBand - 1
+                                else -> selectedParametricBand
+                            }
                         },
                         onDuplicate = {
                             if (settings.parametricBands.size < AudioDspEngine.MAX_PARAMETRIC_BANDS) {
@@ -523,19 +539,43 @@ private fun ParametricBandCard(
     val maxLog = ln(20_000f)
     val normalizedFrequency = ((ln(band.frequencyHz.coerceIn(20f, 20_000f)) - minLog) /
         (maxLog - minLog)).coerceIn(0f, 1f)
+    val supportsGain = band.filterType in setOf(
+        ParametricFilterType.BELL, ParametricFilterType.LOW_SHELF, ParametricFilterType.HIGH_SHELF
+    )
+    val qMaximum = if (band.filterType in setOf(ParametricFilterType.LOW_SHELF, ParametricFilterType.HIGH_SHELF)) 1f else 10f
+    val displayedQ = band.q.coerceIn(0.3f, qMaximum)
     var frequencyText by remember(index) { mutableStateOf(band.frequencyHz.toInt().toString()) }
     var gainText by remember(index) { mutableStateOf("%.1f".format(java.util.Locale.US, band.gainDb)) }
     var qText by remember(index) { mutableStateOf("%.2f".format(java.util.Locale.US, band.q)) }
+    var filterMenuExpanded by remember(index) { mutableStateOf(false) }
     LaunchedEffect(band.frequencyHz) { frequencyText = band.frequencyHz.toInt().toString() }
     LaunchedEffect(band.gainDb) { gainText = "%.1f".format(java.util.Locale.US, band.gainDb) }
     LaunchedEffect(band.q) { qText = "%.2f".format(java.util.Locale.US, band.q) }
     Card(colors = CardDefaults.cardColors(containerColor = VexBackground)) {
         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("Band ${index + 1} · Bell", modifier = Modifier.weight(1f),
+                Text("Band ${index + 1}", modifier = Modifier.weight(1f),
                     style = MaterialTheme.typography.titleSmall)
+                Switch(checked = band.enabled, onCheckedChange = { onChange(band.copy(enabled = it)) })
                 TextButton(onClick = onDuplicate) { Text("Copy") }
                 TextButton(onClick = onRemove) { Text("Remove") }
+            }
+            Box {
+                OutlinedButton(onClick = { filterMenuExpanded = true }) {
+                    Text("Filter · ${band.filterType.label}")
+                }
+                DropdownMenu(expanded = filterMenuExpanded, onDismissRequest = { filterMenuExpanded = false }) {
+                    ParametricFilterType.values().forEach { type ->
+                        DropdownMenuItem(
+                            text = { Text(type.label) },
+                            onClick = {
+                                val shelf = type in setOf(ParametricFilterType.LOW_SHELF, ParametricFilterType.HIGH_SHELF)
+                                onChange(band.copy(filterType = type, q = band.q.coerceIn(0.3f, if (shelf) 1f else 10f)))
+                                filterMenuExpanded = false
+                            }
+                        )
+                    }
+                }
             }
             Text("MANUAL VALUES", color = VexTextMuted, style = MaterialTheme.typography.labelSmall)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -553,6 +593,7 @@ private fun ParametricBandCard(
                     modifier = Modifier.weight(1f),
                     label = { Text("Gain dB") },
                     singleLine = true,
+                    enabled = supportsGain,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
                 )
                 OutlinedTextField(
@@ -570,8 +611,9 @@ private fun ParametricBandCard(
                     val gain = gainText.toFloatOrNull()
                     val q = qText.toFloatOrNull()
                     if (frequency != null && gain != null && q != null &&
-                        frequency in 20f..20_000f && gain in -12f..12f && q in 0.3f..10f
-                    ) onChange(band.copy(frequencyHz = frequency, gainDb = gain, q = q))
+                        frequency in 20f..20_000f &&
+                        (!supportsGain || gain in -12f..12f) && q in 0.3f..qMaximum
+                    ) onChange(band.copy(frequencyHz = frequency, gainDb = if (supportsGain) gain else band.gainDb, q = q))
                 },
                 modifier = Modifier.fillMaxWidth()
             ) { Text("Apply exact values") }
@@ -584,17 +626,19 @@ private fun ParametricBandCard(
                 onChange(band.copy(frequencyHz = hz))
             }, valueRange = 0f..1f)
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("Gain", modifier = Modifier.weight(1f), color = VexTextMuted)
+                Text(if (supportsGain) "Gain" else "Gain · not used by this filter",
+                    modifier = Modifier.weight(1f), color = VexTextMuted)
                 Text("%+.1f dB".format(band.gainDb), color = VexPurple)
             }
             Slider(value = band.gainDb, onValueChange = { onChange(band.copy(gainDb = it)) },
-                valueRange = -12f..12f)
+                enabled = supportsGain, valueRange = -12f..12f)
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("Q Factor", modifier = Modifier.weight(1f), color = VexTextMuted)
-                Text("%.2f".format(band.q), color = VexPurple)
+                Text(if (band.filterType in setOf(ParametricFilterType.LOW_SHELF, ParametricFilterType.HIGH_SHELF)) "Shelf Slope" else "Q Factor",
+                    modifier = Modifier.weight(1f), color = VexTextMuted)
+                Text("%.2f".format(displayedQ), color = VexPurple)
             }
-            Slider(value = band.q, onValueChange = { onChange(band.copy(q = it)) },
-                valueRange = 0.3f..10f)
+            Slider(value = displayedQ, onValueChange = { onChange(band.copy(q = it)) },
+                valueRange = 0.3f..qMaximum)
         }
     }
 }
