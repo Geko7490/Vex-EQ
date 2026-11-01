@@ -22,6 +22,7 @@ import com.vexeq.dsp.DspPerformanceMode
 import com.vexeq.dsp.ParametricBand
 import com.vexeq.dsp.PresetStore
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.exp
 import kotlin.math.ln
@@ -70,9 +71,13 @@ private fun EqualizerScreen() {
     var showSaveDialog by remember { mutableStateOf(false) }
     var presetName by remember { mutableStateOf("") }
     var presetMessage by remember { mutableStateOf("") }
-    var settings by remember { mutableStateOf(DspSettings()) }
+    var settings by remember { mutableStateOf(presetStore.loadLastSettings()) }
     val engine = remember { AudioDspEngine(48_000, 2, settings) }
-    LaunchedEffect(settings) { withContext(Dispatchers.Default) { engine.update(settings) } }
+    LaunchedEffect(settings) {
+        delay(250)
+        withContext(Dispatchers.Default) { engine.update(settings) }
+        withContext(Dispatchers.IO) { presetStore.saveLastSettings(settings) }
+    }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
