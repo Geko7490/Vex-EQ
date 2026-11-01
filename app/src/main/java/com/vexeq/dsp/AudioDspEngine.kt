@@ -206,8 +206,12 @@ class AudioDspEngine(
 
                 ch = 0
                 while (ch < channels) {
-                    output[frame * channels + ch] =
-                        (sampleScratch[ch] * limiterGain).coerceIn(-AudioDspEngine.LIMITER_CEILING, AudioDspEngine.LIMITER_CEILING)
+                    val processed = sampleScratch[ch] * limiterGain
+                    output[frame * channels + ch] = if (active && settings.limiterEnabled) {
+                        processed.coerceIn(-AudioDspEngine.LIMITER_CEILING, AudioDspEngine.LIMITER_CEILING)
+                    } else {
+                        processed
+                    }
                     ch++
                 }
                 frame++
