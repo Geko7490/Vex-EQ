@@ -523,6 +523,12 @@ private fun ParametricBandCard(
     val maxLog = ln(20_000f)
     val normalizedFrequency = ((ln(band.frequencyHz.coerceIn(20f, 20_000f)) - minLog) /
         (maxLog - minLog)).coerceIn(0f, 1f)
+    var frequencyText by remember(index) { mutableStateOf(band.frequencyHz.toInt().toString()) }
+    var gainText by remember(index) { mutableStateOf("%.1f".format(java.util.Locale.US, band.gainDb)) }
+    var qText by remember(index) { mutableStateOf("%.2f".format(java.util.Locale.US, band.q)) }
+    LaunchedEffect(band.frequencyHz) { frequencyText = band.frequencyHz.toInt().toString() }
+    LaunchedEffect(band.gainDb) { gainText = "%.1f".format(java.util.Locale.US, band.gainDb) }
+    LaunchedEffect(band.q) { qText = "%.2f".format(java.util.Locale.US, band.q) }
     Card(colors = CardDefaults.cardColors(containerColor = VexBackground)) {
         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -534,36 +540,41 @@ private fun ParametricBandCard(
             Text("MANUAL VALUES", color = VexTextMuted, style = MaterialTheme.typography.labelSmall)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 OutlinedTextField(
-                    value = band.frequencyHz.toInt().toString(),
-                    onValueChange = { raw -> raw.toFloatOrNull()?.let {
-                        onChange(band.copy(frequencyHz = it.coerceIn(20f, 20_000f)))
-                    } },
+                    value = frequencyText,
+                    onValueChange = { frequencyText = it.filter { ch -> ch.isDigit() }.take(5) },
                     modifier = Modifier.weight(1.2f),
                     label = { Text("Hz") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                 )
                 OutlinedTextField(
-                    value = "%.1f".format(java.util.Locale.US, band.gainDb),
-                    onValueChange = { raw -> raw.toFloatOrNull()?.let {
-                        onChange(band.copy(gainDb = it.coerceIn(-12f, 12f)))
-                    } },
+                    value = gainText,
+                    onValueChange = { gainText = it.filter { ch -> ch.isDigit() || ch == '-' || ch == '.' }.take(6) },
                     modifier = Modifier.weight(1f),
                     label = { Text("Gain dB") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
                 )
                 OutlinedTextField(
-                    value = "%.2f".format(java.util.Locale.US, band.q),
-                    onValueChange = { raw -> raw.toFloatOrNull()?.let {
-                        onChange(band.copy(q = it.coerceIn(0.3f, 10f)))
-                    } },
+                    value = qText,
+                    onValueChange = { qText = it.filter { ch -> ch.isDigit() || ch == '.' }.take(5) },
                     modifier = Modifier.weight(0.9f),
                     label = { Text("Q") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
                 )
             }
+            OutlinedButton(
+                onClick = {
+                    val frequency = frequencyText.toFloatOrNull()
+                    val gain = gainText.toFloatOrNull()
+                    val q = qText.toFloatOrNull()
+                    if (frequency != null && gain != null && q != null &&
+                        frequency in 20f..20_000f && gain in -12f..12f && q in 0.3f..10f
+                    ) onChange(band.copy(frequencyHz = frequency, gainDb = gain, q = q))
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("Apply exact values") }
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text("Frequency", modifier = Modifier.weight(1f), color = VexTextMuted)
                 Text("${band.frequencyHz.toInt()} Hz", color = VexPurple)
