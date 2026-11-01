@@ -20,6 +20,7 @@ import com.vexeq.dsp.AudioDspEngine
 import com.vexeq.dsp.DspSettings
 import com.vexeq.dsp.DspPerformanceMode
 import com.vexeq.dsp.ParametricBand
+import com.vexeq.dsp.PresetStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlin.math.exp
@@ -63,6 +64,12 @@ private fun VexEqHome() {
 
 @Composable
 private fun EqualizerScreen() {
+    val context = LocalContext.current
+    val presetStore = remember(context) { PresetStore(context) }
+    var presets by remember { mutableStateOf(presetStore.list()) }
+    var showSaveDialog by remember { mutableStateOf(false) }
+    var presetName by remember { mutableStateOf("") }
+    var presetMessage by remember { mutableStateOf("") }
     var settings by remember { mutableStateOf(DspSettings()) }
     val engine = remember { AudioDspEngine(48_000, 2, settings) }
     LaunchedEffect(settings) { withContext(Dispatchers.Default) { engine.update(settings) } }
@@ -104,6 +111,40 @@ private fun EqualizerScreen() {
                             )
                         ) { Text(mode.name) }
                     }
+                }
+            }
+        }
+
+        Card(colors = CardDefaults.cardColors(containerColor = VexPanel)) {
+            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Presets", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
+                    Button(onClick = { presetName = ""; showSaveDialog = true }) { Text("Save current") }
+                }
+                if (presets.isEmpty()) {
+                    Text("No saved presets yet. Save your current EQ curve to reuse it later.",
+                        color = VexTextMuted, style = MaterialTheme.typography.bodySmall)
+                } else {
+                    presets.forEach { preset ->
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(preset.name, style = MaterialTheme.typography.titleSmall)
+                                Text("${preset.settings.performanceMode.name} · ${preset.settings.parametricBands.size} PEQ bands",
+                                    color = VexTextMuted, style = MaterialTheme.typography.bodySmall)
+                            }
+                            TextButton(onClick = { settings = preset.settings; presetMessage = "Loaded: ${preset.name}" }) {
+                                Text("Load")
+                            }
+                            TextButton(onClick = {
+                                presetStore.delete(preset.name)
+                                presets = presetStore.list()
+                                presetMessage = "Deleted: ${preset.name}"
+                            }) { Text("Delete") }
+                        }
+                    }
+                }
+                if (presetMessage.isNotBlank()) {
+                    Text(presetMessage, color = VexPurple, style = MaterialTheme.typography.bodySmall)
                 }
             }
         }
@@ -191,6 +232,34 @@ private fun EqualizerScreen() {
         Text("These controls configure VEX EQ's PCM DSP core. They do not yet modify system audio or VEXPlayer playback; that requires playback-host integration and device compatibility checks.",
             color = VexTextMuted, style = MaterialTheme.typography.bodySmall)
         Spacer(Modifier.height(20.dp))
+    }
+    if (showSaveDialog) {
+        AlertDialog(
+            onDismissRequest = { showSaveDialog = false },
+            title = { Text("Save EQ preset") },
+            text = {
+                OutlinedTextField(
+                    value = presetName,
+                    onValueChange = { presetName = it.take(40) },
+                    label = { Text("Preset name") },
+                    singleLine = true
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (presetStore.save(presetName, settings)) {
+                        presets = presetStore.list()
+                        presetMessage = "Preset saved"
+                        showSaveDialog = false
+                    } else {
+                        presetMessage = "Enter a name and try again"
+                    }
+                }) { Text("Save") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSaveDialog = false }) { Text("Cancel") }
+            }
+        )
     }
 }
 
