@@ -428,9 +428,14 @@ private fun EqualizerScreen(bridgeClient: VexPlayerBridgeClient, bridgeState: Ve
                             commitSettings(settings.copy(parametricBands = updated))
                         },
                         onRemove = {
-                            commitSettings(settings.copy(
-                                parametricBands = settings.parametricBands.filterIndexed { i, _ -> i != index }
-                            ))
+                            val remaining = settings.parametricBands.filterIndexed { i, _ -> i != index }
+                            commitSettings(settings.copy(parametricBands = remaining))
+                            selectedParametricBand = when {
+                                remaining.isEmpty() -> -1
+                                selectedParametricBand == index -> index.coerceAtMost(remaining.lastIndex)
+                                selectedParametricBand > index -> selectedParametricBand - 1
+                                else -> selectedParametricBand
+                            }
                         },
                         onDuplicate = {
                             if (settings.parametricBands.size < AudioDspEngine.MAX_PARAMETRIC_BANDS) {
