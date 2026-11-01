@@ -170,7 +170,7 @@ fun StudioModulesScreen(bridgeClient: VexPlayerBridgeClient, bridgeState: VexPla
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text("Compressor", style = MaterialTheme.typography.titleMedium)
-                        Text("Linked-channel RMS/peak protection stage", color = StudioMuted,
+                        Text("Linked-channel peak detector and gain reduction", color = StudioMuted,
                             style = MaterialTheme.typography.bodySmall)
                     }
                     Switch(checked = config?.compressorEnabled ?: false,
