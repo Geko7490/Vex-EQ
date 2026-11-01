@@ -11,6 +11,10 @@ import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.math.sqrt
 
+enum class DspPerformanceMode(val bandStride: Int, val maxParametricBands: Int) {
+    LOW(4, 2), MID(2, 4), HIGH(1, 8)
+}
+
 data class ParametricBand(
     val frequencyHz: Float = 1_000f,
     val gainDb: Float = 0f,
@@ -25,7 +29,8 @@ data class DspSettings(
     val stereoWidth: Float = 0f,
     val preampDb: Float = 0f,
     val autoHeadroom: Boolean = true,
-    val limiterEnabled: Boolean = true
+    val limiterEnabled: Boolean = true,
+    val performanceMode: DspPerformanceMode = DspPerformanceMode.HIGH
 ) {
     fun sanitized(): DspSettings = copy(
         graphicGainsDb = AudioDspEngine.resampleGains(graphicGainsDb, AudioDspEngine.BAND_FREQUENCIES.size)
@@ -94,6 +99,7 @@ class AudioDspEngine(
 
         init {
             graphicFilters = AudioDspEngine.BAND_FREQUENCIES.mapIndexedNotNull { index, frequency ->
+                if (index % settings.performanceMode.bandStride != 0 && index != AudioDspEngine.BAND_FREQUENCIES.lastIndex) return@mapIndexedNotNull null
                 val gain = settings.graphicGainsDb[index]
                 if (abs(gain) < 0.0001f) null
                 else Biquad(peaking(frequency.toFloat(), gain, AudioDspEngine.GRAPHIC_Q), channels)
