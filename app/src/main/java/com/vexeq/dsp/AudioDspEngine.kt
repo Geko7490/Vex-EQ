@@ -15,10 +15,17 @@ enum class DspPerformanceMode(val bandStride: Int, val maxParametricBands: Int) 
     LOW(4, 16), MID(2, 16), HIGH(1, 16)
 }
 
+enum class ParametricFilterType(val label: String) {
+    BELL("Bell"), LOW_SHELF("Low Shelf"), HIGH_SHELF("High Shelf"),
+    NOTCH("Notch"), HIGH_PASS("High Pass"), LOW_PASS("Low Pass")
+}
+
 data class ParametricBand(
     val frequencyHz: Float = 1_000f,
     val gainDb: Float = 0f,
-    val q: Float = 1f
+    val q: Float = 1f,
+    val filterType: ParametricFilterType = ParametricFilterType.BELL,
+    val enabled: Boolean = true
 )
 
 data class DspSettings(
@@ -130,12 +137,17 @@ class AudioDspEngine(
                     channels
                 )
             }.toTypedArray()
-            parametricFilters = settings.parametricBands.mapNotNull { band ->
-                if (abs(band.gainDb) < 0.0001f) null
-                else Biquad(
-                    peaking(band.frequencyHz.coerceAtMost(rate * 0.46f), band.gainDb, band.q),
-                    channels
-                )
+            parametricFilters = settings.parametricBands.filter { it.enabled }.mapNotNull { band ->
+                val frequency = band.frequencyHz.coerceAtMost(rate * 0.46f)
+                val coefficients = when (band.filterType) {
+                    ParametricFilterType.BELL -> peaking(frequency, band.gainDb, band.q)
+                    ParametricFilterType.LOW_SHELF -> shelf(frequency, band.gainDb, band.q, low = true)
+                    ParametricFilterType.HIGH_SHELF -> shelf(frequency, band.gainDb, band.q, low = false)
+                    ParametricFilterType.NOTCH -> notch(frequency, band.q)
+                    ParametricFilterType.HIGH_PASS -> highPass(frequency, band.q)
+                    ParametricFilterType.LOW_PASS -> lowPass(frequency, band.q)
+                }
+                if (coefficients == IDENTITY) null else Biquad(coefficients, channels)
             }.toTypedArray()
             bassFilter = Biquad(lowPass(min(120f, rate * 0.1f)), channels)
 
@@ -316,15 +328,71 @@ class AudioDspEngine(
             )
         }
 
-        private fun lowPass(frequency: Float): Coefficients {
+        private fun lowPass(frequency: Float, q: Float = 0.70710677f): Coefficients {
+            if (frequency <= 0f || frequency >= rate * 0.48f) return AudioDspEngine.IDENTITY
             val w = (2.0 * PI * frequency / rate).toFloat()
             val cosine = cos(w)
-            val alpha = sin(w) / (2f * 0.70710677f)
+            val alpha = sin(w) / (2f * q.coerceIn(0.3f, 10f))
             val a0 = 1f + alpha
             return Coefficients(
                 ((1f - cosine) * 0.5f) / a0, (1f - cosine) / a0,
                 ((1f - cosine) * 0.5f) / a0, (-2f * cosine) / a0, (1f - alpha) / a0
             )
+        }
+
+        private fun highPass(frequency: Float, q: Float): Coefficients {
+            if (frequency <= 0f || frequency >= rate * 0.48f) return AudioDspEngine.IDENTITY
+            val w = (2.0 * PI * frequency / rate).toFloat()
+            val c = cos(w)
+            val alpha = sin(w) / (2f * q.coerceIn(0.3f, 10f))
+            val a0 = 1f + alpha
+            return Coefficients(
+                ((1f + c) * 0.5f) / a0, (-(1f + c)) / a0,
+                ((1f + c) * 0.5f) / a0, (-2f * c) / a0, (1f - alpha) / a0
+            )
+        }
+
+        private fun notch(frequency: Float, q: Float): Coefficients {
+            if (frequency <= 0f || frequency >= rate * 0.48f) return AudioDspEngine.IDENTITY
+            val w = (2.0 * PI * frequency / rate).toFloat()
+            val c = cos(w)
+            val alpha = sin(w) / (2f * q.coerceIn(0.3f, 10f))
+            val a0 = 1f + alpha
+            return Coefficients(1f / a0, (-2f * c) / a0, 1f / a0,
+                (-2f * c) / a0, (1f - alpha) / a0)
+        }
+
+        private fun shelf(frequency: Float, gainDb: Float, slope: Float, low: Boolean): Coefficients {
+            if (frequency <= 0f || frequency >= rate * 0.48f || abs(gainDb) < 0.0001f) return AudioDspEngine.IDENTITY
+            val a = 10.0.pow(gainDb / 40.0).toFloat()
+            val w = (2.0 * PI * frequency / rate).toFloat()
+            val c = cos(w)
+            val sn = sin(w)
+            val s = slope.coerceIn(0.3f, 1f)
+            val alpha = sn * 0.5f * kotlin.math.sqrt((a + 1f / a) * (1f / s - 1f) + 2f)
+            val beta = 2f * kotlin.math.sqrt(a) * alpha
+            val a0: Float
+            val b0: Float
+            val b1: Float
+            val b2: Float
+            val a1: Float
+            val a2: Float
+            if (low) {
+                b0 = a * ((a + 1f) - (a - 1f) * c + beta)
+                b1 = 2f * a * ((a - 1f) - (a + 1f) * c)
+                b2 = a * ((a + 1f) - (a - 1f) * c - beta)
+                a0 = (a + 1f) + (a - 1f) * c + beta
+                a1 = -2f * ((a - 1f) + (a + 1f) * c)
+                a2 = (a + 1f) + (a - 1f) * c - beta
+            } else {
+                b0 = a * ((a + 1f) + (a - 1f) * c + beta)
+                b1 = -2f * a * ((a - 1f) + (a + 1f) * c)
+                b2 = a * ((a + 1f) + (a - 1f) * c - beta)
+                a0 = (a + 1f) - (a - 1f) * c + beta
+                a1 = 2f * ((a - 1f) - (a + 1f) * c)
+                a2 = (a + 1f) - (a - 1f) * c - beta
+            }
+            return Coefficients(b0 / a0, b1 / a0, b2 / a0, a1 / a0, a2 / a0)
         }
     }
 
