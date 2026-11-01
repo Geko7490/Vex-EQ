@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -33,6 +35,7 @@ import com.vexeq.bridge.VexPlayerBridgeClient
 import com.vexeq.bridge.VexPlayerBridgeState
 import com.vexeq.bridge.VexPlayerBridgeStatus
 import com.vexeq.visualizer.nextgen.NextGenSpectrumView
+import com.vexeq.visualizer.nextgen.NextGenVisualizerStyle
 
 private val AnalyzerPanel = Color(0xFF1C1B23)
 private val AnalyzerMuted = Color(0xFFB8B4C0)
@@ -45,10 +48,13 @@ fun SpectrumStudioScreen(
 ) {
     val frame by bridgeClient.spectrumFrame.collectAsState()
     val spectrumError by bridgeClient.spectrumError.collectAsState()
-    var showBars by remember { mutableStateOf(true) }
-    var showWave by remember { mutableStateOf(true) }
+    var selectedStyle by remember { mutableStateOf(NextGenVisualizerStyle.FFT_BARS) }
     var showRta by remember { mutableStateOf(true) }
     var showPeakHold by remember { mutableStateOf(true) }
+    var showBeatPulse by remember { mutableStateOf(false) }
+    var showRotate by remember { mutableStateOf(false) }
+    var showGlitch by remember { mutableStateOf(false) }
+    var showShake by remember { mutableStateOf(false) }
 
     LaunchedEffect(bridgeState.status) {
         if (bridgeState.status == VexPlayerBridgeStatus.READY ||
@@ -87,20 +93,50 @@ fun SpectrumStudioScreen(
             }
         }
 
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(selected = showBars, onClick = { showBars = !showBars }, label = { Text("FFT Bars") })
-            FilterChip(selected = showWave, onClick = { showWave = !showWave }, label = { Text("FFT Wave") })
-            FilterChip(selected = showRta, onClick = { showRta = !showRta }, label = { Text("RTA") })
-            FilterChip(selected = showPeakHold, onClick = { showPeakHold = !showPeakHold }, label = { Text("Peak Hold") })
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("VISUALIZER STYLE", color = AnalyzerMuted, style = MaterialTheme.typography.labelSmall)
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                NextGenVisualizerStyle.values().forEach { style ->
+                    FilterChip(
+                        selected = selectedStyle == style,
+                        onClick = { selectedStyle = style },
+                        label = { Text(style.label) }
+                    )
+                }
+            }
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                FilterChip(selected = showBeatPulse, onClick = { showBeatPulse = !showBeatPulse }, label = { Text("Beat") })
+                FilterChip(selected = showRotate, onClick = { showRotate = !showRotate }, label = { Text("Rotate") })
+                FilterChip(selected = showGlitch, onClick = { showGlitch = !showGlitch }, label = { Text("Glitch") })
+                FilterChip(selected = showShake, onClick = { showShake = !showShake }, label = { Text("Shake") })
+                FilterChip(selected = showRta, onClick = { showRta = !showRta }, label = { Text("RTA") })
+                FilterChip(selected = showPeakHold, onClick = { showPeakHold = !showPeakHold }, label = { Text("Peak Hold") })
+            }
         }
 
         Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF101014))) {
             Column(Modifier.fillMaxWidth().padding(8.dp)) {
-                if (frame.timestampNanos > 0L && (showBars || showWave)) {
+                if (frame.timestampNanos > 0L) {
                     AndroidView(
                         factory = { context -> NextGenSpectrumView(context) },
                         modifier = Modifier.fillMaxWidth().height(280.dp),
-                        update = { it.submitFrame(frame, showBars, showWave) }
+                        update = {
+                            it.submitFrame(
+                                frame = frame,
+                                style = selectedStyle,
+                                beatPulse = showBeatPulse,
+                                rotate = showRotate,
+                                glitch = showGlitch,
+                                shake = showShake,
+                                peakHold = showPeakHold
+                            )
+                        }
                     )
                 } else {
                     Column(
@@ -111,7 +147,6 @@ fun SpectrumStudioScreen(
                             when {
                                 bridgeState.status !in setOf(VexPlayerBridgeStatus.READY, VexPlayerBridgeStatus.CONNECTED) ->
                                     "Waiting for VEXPlayer connection"
-                                !showBars && !showWave -> "Enable at least one visual layer"
                                 spectrumError != null -> spectrumError!!
                                 else -> "Play a track in VEXPlayer to start the analyzer"
                             },
