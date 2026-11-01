@@ -3,38 +3,21 @@ package com.vexeq
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.platform.LocalContext
 import com.vexeq.compat.CompatibilityEngine
 import com.vexeq.compat.CompatibilityReport
+import com.vexeq.dsp.AudioDspEngine
+import com.vexeq.dsp.DspSettings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -42,6 +25,7 @@ import kotlinx.coroutines.withContext
 private val VexPurple = Color(0xFFA855F7)
 private val VexBackground = Color(0xFF0F0F13)
 private val VexPanel = Color(0xFF1C1B23)
+private val VexTextMuted = Color(0xFFB8B4C0)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -51,19 +35,128 @@ class MainActivity : ComponentActivity() {
                 primary = VexPurple, background = VexBackground, surface = VexPanel,
                 onBackground = Color(0xFFF5F3F8), onSurface = Color(0xFFF5F3F8)
             )) {
-                Surface(Modifier.fillMaxSize(), color = VexBackground) { CompatibilityHome() }
+                Surface(Modifier.fillMaxSize(), color = VexBackground) { VexEqHome() }
             }
         }
     }
 }
 
-@androidx.compose.runtime.Composable
-private fun CompatibilityHome() {
+@Composable
+private fun VexEqHome() {
+    var selectedTab by remember { mutableIntStateOf(0) }
+    Column(Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 12.dp)) {
+        Text("VEX EQ", color = VexPurple, fontSize = 30.sp, style = MaterialTheme.typography.headlineLarge)
+        Text("PRECISION AUDIO CONTROL", color = VexTextMuted, style = MaterialTheme.typography.labelMedium)
+        Spacer(Modifier.height(14.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = { selectedTab = 0 }, modifier = Modifier.weight(1f)) { Text("Equalizer") }
+            Button(onClick = { selectedTab = 1 }, modifier = Modifier.weight(1f)) { Text("Compatibility") }
+        }
+        Spacer(Modifier.height(10.dp))
+        if (selectedTab == 0) EqualizerScreen() else CompatibilityScreen()
+    }
+}
+
+@Composable
+private fun EqualizerScreen() {
+    var settings by remember { mutableStateOf(DspSettings()) }
+    val engine = remember { AudioDspEngine(48_000, 2, settings) }
+    LaunchedEffect(settings) { engine.update(settings) }
+
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Card(colors = CardDefaults.cardColors(containerColor = VexPanel)) {
+            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Master EQ", style = MaterialTheme.typography.titleLarge)
+                        Text(if (settings.enabled) "DSP enabled" else "DSP bypassed", color = VexTextMuted)
+                    }
+                    Switch(checked = settings.enabled, onCheckedChange = { settings = settings.copy(enabled = it) })
+                }
+                Text("DSP engine initialized · PCM host integration is the next stage",
+                    color = VexTextMuted, style = MaterialTheme.typography.bodySmall)
+            }
+        }
+
+        DspSliderCard("Preamp", "%.1f dB".format(settings.preampDb), settings.preampDb, -12f, 6f) {
+            settings = settings.copy(preampDb = it)
+        }
+        DspSliderCard("Bass Boost", "${(settings.bassBoost * 100).toInt()}%", settings.bassBoost, 0f, 1f) {
+            settings = settings.copy(bassBoost = it)
+        }
+        DspSliderCard("Stereo Width", "${(settings.stereoWidth * 100).toInt()}%", settings.stereoWidth, 0f, 1f) {
+            settings = settings.copy(stereoWidth = it)
+        }
+
+        Card(colors = CardDefaults.cardColors(containerColor = VexPanel)) {
+            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                SettingSwitch("Automatic Headroom", settings.autoHeadroom) { settings = settings.copy(autoHeadroom = it) }
+                SettingSwitch("Output Limiter", settings.limiterEnabled) { settings = settings.copy(limiterEnabled = it) }
+            }
+        }
+
+        Card(colors = CardDefaults.cardColors(containerColor = VexPanel)) {
+            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("31-Band Graphic EQ", style = MaterialTheme.typography.titleLarge)
+                Text("Adjust each center frequency from -12 dB to +12 dB", color = VexTextMuted,
+                    style = MaterialTheme.typography.bodySmall)
+                Spacer(Modifier.height(4.dp))
+                AudioDspEngine.BAND_FREQUENCIES.forEachIndexed { index, frequency ->
+                    val value = settings.graphicGainsDb[index]
+                    Column(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Text(formatFrequency(frequency), modifier = Modifier.weight(1f),
+                                style = MaterialTheme.typography.labelLarge)
+                            Text("%+.1f dB".format(value), color = VexPurple,
+                                style = MaterialTheme.typography.labelMedium)
+                        }
+                        Slider(value = value, onValueChange = { newValue ->
+                            val updated = settings.graphicGainsDb.toMutableList()
+                            updated[index] = newValue
+                            settings = settings.copy(graphicGainsDb = updated)
+                        }, valueRange = -12f..12f)
+                    }
+                }
+                Button(onClick = { settings = settings.copy(graphicGainsDb = List(31) { 0f }) },
+                    modifier = Modifier.fillMaxWidth()) { Text("Reset all bands") }
+            }
+        }
+
+        Text("These controls configure VEX EQ's PCM DSP core. They do not yet modify system audio or VEXPlayer playback; that requires playback-host integration and device compatibility checks.",
+            color = VexTextMuted, style = MaterialTheme.typography.bodySmall)
+        Spacer(Modifier.height(20.dp))
+    }
+}
+
+@Composable
+private fun DspSliderCard(title: String, valueLabel: String, value: Float, minimum: Float,
+    maximum: Float, onValueChange: (Float) -> Unit) {
+    Card(colors = CardDefaults.cardColors(containerColor = VexPanel)) {
+        Column(Modifier.fillMaxWidth().padding(16.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(title, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                Text(valueLabel, color = VexPurple)
+            }
+            Slider(value = value, onValueChange = onValueChange, valueRange = minimum..maximum)
+        }
+    }
+}
+
+@Composable
+private fun SettingSwitch(title: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(title, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
+@Composable
+private fun CompatibilityScreen() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var report by remember { mutableStateOf<CompatibilityReport?>(null) }
     var scanning by remember { mutableStateOf(true) }
-
     fun refresh() {
         scope.launch {
             scanning = true
@@ -72,15 +165,8 @@ private fun CompatibilityHome() {
         }
     }
     LaunchedEffect(Unit) { refresh() }
-
-    Column(
-        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
-    ) {
-        Text("VEX EQ", color = VexPurple, fontSize = 30.sp, style = MaterialTheme.typography.headlineLarge)
-        Text("SYSTEM AUDIO • COMPATIBILITY", color = Color.LightGray, style = MaterialTheme.typography.labelMedium)
-        Text("Device capability check", style = MaterialTheme.typography.titleLarge)
-
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(12.dp)) {
         if (scanning) {
             Card(colors = CardDefaults.cardColors(containerColor = VexPanel)) {
                 Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically,
@@ -93,8 +179,10 @@ private fun CompatibilityHome() {
         report?.let { data ->
             StatusCard("Global audio processing", data.globalStatus.label, data.globalExplanation)
             StatusCard("VEXPlayer connection", data.playerStatus, data.playerExplanation)
-            StatusCard("Audio effects", data.effectSummary, data.effectDetails.joinToString("\n").ifBlank { "No effect descriptors reported." })
-            StatusCard("Audio output", data.outputSummary, data.outputDetails.joinToString("\n").ifBlank { "No output route reported." })
+            StatusCard("Audio effects", data.effectSummary,
+                data.effectDetails.joinToString("\n").ifBlank { "No effect descriptors reported." })
+            StatusCard("Audio output", data.outputSummary,
+                data.outputDetails.joinToString("\n").ifBlank { "No output route reported." })
             StatusCard("Android", "API " + data.apiLevel, data.androidRelease)
             StatusCard("Active third-party effects", "Not publicly inspectable",
                 "Android does not provide a general public API to enumerate every other app's active audio effects. VEX EQ will not guess this state.")
@@ -102,19 +190,21 @@ private fun CompatibilityHome() {
         Button(onClick = ::refresh, enabled = !scanning, modifier = Modifier.fillMaxWidth()) {
             Text("Rescan compatibility")
         }
-        Spacer(Modifier.height(16.dp))
-        Text("Compatibility scan only. This build does not activate a global effect or alter audio from other apps.",
-            color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
     }
 }
 
-@androidx.compose.runtime.Composable
+@Composable
 private fun StatusCard(title: String, status: String, details: String) {
     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = VexPanel)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(title, color = Color.LightGray, style = MaterialTheme.typography.labelMedium)
+            Text(title, color = VexTextMuted, style = MaterialTheme.typography.labelMedium)
             Text(status, color = VexPurple, style = MaterialTheme.typography.titleMedium)
             Text(details, color = Color(0xFFD0CDD6), style = MaterialTheme.typography.bodySmall)
         }
     }
+}
+
+private fun formatFrequency(hz: Int): String = when {
+    hz >= 1_000 -> if (hz % 1_000 == 0) "${hz / 1_000} kHz" else "${hz / 1_000f} kHz"
+    else -> "${hz} Hz"
 }
