@@ -40,6 +40,10 @@ class VexPlayerBridgeConfigTest {
         assertFalse(valid.copy(bassStrength = 1_001).isValid())
         assertFalse(valid.copy(graphicBandLevelsMb = listOf(0)).isValid())
         assertFalse(valid.copy(parametricBands = List(9) { BridgeParametricBand(1_000, 0, 1f) }).isValid())
+        assertFalse(valid.copy(parametricBands = listOf(BridgeParametricBand(1_000, 0, Float.NaN))).isValid())
+        assertFalse(valid.copy(parametricBands = listOf(BridgeParametricBand(1_000, 0, Float.POSITIVE_INFINITY))).isValid())
+        assertFalse(valid.copy(parametricBands = listOf(BridgeParametricBand(19, 0, 1f))).isValid())
+        assertFalse(valid.copy(parametricBands = listOf(BridgeParametricBand(1_000, 1_201, 1f))).isValid())
     }
 
     @Test fun sanitizesSettingsBeforeBuildingBridgePayload() {
