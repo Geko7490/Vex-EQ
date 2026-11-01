@@ -4,7 +4,7 @@ Standalone Android audio equalizer and DSP companion with an optional advanced V
 
 ## Project status
 
-The native Android foundation, compatibility dashboard, PCM DSP core, interactive 31-band graphic EQ and 8-band parametric EQ controls, plus Low / Mid / High workload profiles, and automated build/test workflow are in place. The DSP core is implemented and unit-tested as a reusable PCM processing component. It is **not yet connected to Android's global output or VEXPlayer playback**, so the current UI clearly labels playback-host integration as pending.
+The native Android foundation, compatibility dashboard, PCM DSP core, interactive 31-band graphic EQ and 8-band parametric EQ controls, offline local preset save/load/delete, plus Low / Mid / High workload profiles, and automated build/test workflow are in place. The DSP core is implemented and unit-tested as a reusable PCM processing component. It is **not yet connected to Android's global output or VEXPlayer playback**, so the current UI clearly labels playback-host integration as pending.
 
 ## Product direction
 
