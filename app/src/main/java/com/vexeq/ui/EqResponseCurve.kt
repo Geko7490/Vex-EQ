@@ -15,6 +15,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.geometry.Offset
@@ -28,7 +29,6 @@ import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.exp
 import kotlin.math.ln
-import kotlin.math.ln
 import kotlin.math.log10
 import kotlin.math.pow
 import kotlin.math.sin
@@ -39,8 +39,8 @@ private val GraphMuted = Color(0xFF77717F)
 private val GraphGrid = Color(0xFF302C38)
 
 /**
- * Displays the estimated combined response of the current graphic and parametric EQ.
- * This is a read-only visualization; it never processes or routes audio.
+ * Displays and edits the estimated combined response of the current graphic and parametric EQ.
+ * Gestures update PEQ settings only; this view never processes or routes audio.
  */
 @Composable
 fun EqResponseCurve(
