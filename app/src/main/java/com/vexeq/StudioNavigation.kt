@@ -3,14 +3,13 @@ package com.vexeq
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
@@ -18,6 +17,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -29,7 +29,6 @@ import androidx.compose.ui.unit.dp
 import com.vexeq.bridge.VexPlayerBridgeClient
 import com.vexeq.bridge.VexPlayerBridgeState
 import com.vexeq.bridge.VexPlayerBridgeStatus
-import com.vexeq.dsp.DspSettings
 import com.vexeq.dsp.PresetStore
 
 private val StudioPanel = Color(0xFF1B1A22)
@@ -82,9 +81,7 @@ fun HomeDashboardScreen(
                     Text("Master EQ", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
                     Switch(
                         checked = config?.enabled ?: false,
-                        onCheckedChange = { enabled ->
-                            config?.let { bridgeClient.apply(it.copy(enabled = enabled)) }
-                        },
+                        onCheckedChange = { enabled -> config?.let { bridgeClient.apply(it.copy(enabled = enabled)) } },
                         enabled = connected && config != null
                     )
                 }
@@ -118,39 +115,71 @@ fun HomeDashboardScreen(
 fun StudioModulesScreen(bridgeClient: VexPlayerBridgeClient, bridgeState: VexPlayerBridgeState) {
     val config = bridgeState.config
     val connected = bridgeState.status == VexPlayerBridgeStatus.CONNECTED
+    var selectedSection by remember { mutableIntStateOf(0) }
+
     Column(Modifier.fillMaxSize().padding(bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Card(colors = CardDefaults.cardColors(containerColor = StudioPanel)) {
-            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("STEREO & PHASE", color = StudioPurple, style = MaterialTheme.typography.labelLarge)
-                Text("Stereo Width", style = MaterialTheme.typography.titleMedium)
-                val width = (config?.stereoWidth ?: 0) / 1000f
-                Text("${(width * 100).toInt()}%", color = StudioMuted)
-                Slider(value = width, onValueChange = { value ->
-                    config?.let { bridgeClient.apply(it.copy(stereoWidth = (value * 1000).toInt())) }
-                }, enabled = connected, valueRange = 0f..1f)
-                Text("Mono compatibility and live phase correlation require channel-separated analysis frames. They are intentionally not estimated from the mono FFT feed.",
-                    color = StudioMuted, style = MaterialTheme.typography.bodySmall)
+        Text("STUDIO WORKSPACE", color = StudioPurple, style = MaterialTheme.typography.labelLarge)
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            listOf("Stereo", "Phase", "Dynamics").forEachIndexed { index, label ->
+                FilterChip(
+                    selected = selectedSection == index,
+                    onClick = { selectedSection = index },
+                    label = { Text(label) }
+                )
             }
         }
-        Card(colors = CardDefaults.cardColors(containerColor = StudioPanel)) {
-            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("DYNAMICS", color = StudioPurple, style = MaterialTheme.typography.labelLarge)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Output Limiter", style = MaterialTheme.typography.titleMedium)
-                        Text("VEXPlayer's existing linked-channel safety limiter", color = StudioMuted,
-                            style = MaterialTheme.typography.bodySmall)
+
+        when (selectedSection) {
+            0 -> {
+                Card(colors = CardDefaults.cardColors(containerColor = StudioPanel)) {
+                    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("STEREO WIDTH", color = StudioPurple, style = MaterialTheme.typography.labelLarge)
+                        Text("Stereo Width", style = MaterialTheme.typography.titleMedium)
+                        val width = (config?.stereoWidth ?: 0) / 1000f
+                        Text("${(width * 100).toInt()}%", color = StudioMuted)
+                        Slider(value = width, onValueChange = { value ->
+                            config?.let { bridgeClient.apply(it.copy(stereoWidth = (value * 1000).toInt())) }
+                        }, enabled = connected, valueRange = 0f..1f)
+                        Text("Width control is live when VEXPlayer is connected. Keep extreme widening in check to preserve mono compatibility.",
+                            color = StudioMuted, style = MaterialTheme.typography.bodySmall)
                     }
-                    Switch(
-                        checked = config?.limiterEnabled ?: true,
-                        onCheckedChange = { enabled -> config?.let { bridgeClient.apply(it.copy(limiterEnabled = enabled)) } },
-                        enabled = connected && config != null
-                    )
                 }
-                Text("Compressor, soft clipper and transient shaping are not exposed by the current bridge/DSP contract yet. No inactive controls are presented as working effects.",
-                    color = StudioMuted, style = MaterialTheme.typography.bodySmall)
+            }
+            1 -> {
+                Card(colors = CardDefaults.cardColors(containerColor = StudioPanel)) {
+                    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("PHASE ANALYSIS", color = StudioPurple, style = MaterialTheme.typography.labelLarge)
+                        Text("L/R correlation · Mono compatibility", style = MaterialTheme.typography.titleMedium)
+                        Text("Not available from the current bridge stream. The existing analyzer sends a combined spectrum and waveform, not separate left/right channel samples. Phase values will remain unavailable until VEXPlayer exposes channel-separated analysis frames.",
+                            color = StudioMuted, style = MaterialTheme.typography.bodySmall)
+                        Text("STATUS  ·  WAITING FOR L/R ANALYSIS API", color = StudioMuted,
+                            style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+            }
+            else -> {
+                Card(colors = CardDefaults.cardColors(containerColor = StudioPanel)) {
+                    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("DYNAMICS PROCESSING", color = StudioPurple, style = MaterialTheme.typography.labelLarge)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text("Output Limiter", style = MaterialTheme.typography.titleMedium)
+                                Text("Existing linked-channel safety limiter · fixed ceiling", color = StudioMuted,
+                                    style = MaterialTheme.typography.bodySmall)
+                            }
+                            Switch(
+                                checked = config?.limiterEnabled ?: true,
+                                onCheckedChange = { enabled -> config?.let { bridgeClient.apply(it.copy(limiterEnabled = enabled)) } },
+                                enabled = connected && config != null
+                            )
+                        }
+                        Text("Compressor, soft clipper and transient shaper are not yet in the VEXPlayer DSP contract. They will be added to the host processor before their controls are enabled here.",
+                            color = StudioMuted, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
             }
         }
+
         Card(colors = CardDefaults.cardColors(containerColor = StudioPanel)) {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text("SIGNAL OWNERSHIP", color = StudioPurple, style = MaterialTheme.typography.labelLarge)
