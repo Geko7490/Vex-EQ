@@ -20,6 +20,12 @@ data class VexPlayerBridgeConfig(
     val preampMb: Int,
     val autoHeadroom: Boolean,
     val limiterEnabled: Boolean,
+    val compressorEnabled: Boolean = false,
+    val compressorThresholdDb: Float = -18f,
+    val compressorRatio: Float = 4f,
+    val compressorAttackMs: Float = 10f,
+    val compressorReleaseMs: Float = 120f,
+    val softClipperEnabled: Boolean = false,
     val parametricBands: List<BridgeParametricBand>
 ) {
     fun isValid(): Boolean =
@@ -29,6 +35,10 @@ data class VexPlayerBridgeConfig(
             bassStrength in 0..1_000 &&
             stereoWidth in 0..1_000 &&
             preampMb in -1_200..600 &&
+            compressorThresholdDb.isFinite() && compressorThresholdDb in -36f..0f &&
+            compressorRatio.isFinite() && compressorRatio in 1f..20f &&
+            compressorAttackMs.isFinite() && compressorAttackMs in 1f..100f &&
+            compressorReleaseMs.isFinite() && compressorReleaseMs in 10f..1_000f &&
             parametricBands.size <= 16 &&
             parametricBands.all {
                 it.frequencyHz in 20..22_000 && it.gainMb in -1_200..1_200 &&
@@ -48,6 +58,12 @@ data class VexPlayerBridgeConfig(
             preampDb = preampMb / 100f,
             autoHeadroom = autoHeadroom,
             limiterEnabled = limiterEnabled,
+            compressorEnabled = compressorEnabled,
+            compressorThresholdDb = compressorThresholdDb,
+            compressorRatio = compressorRatio,
+            compressorAttackMs = compressorAttackMs,
+            compressorReleaseMs = compressorReleaseMs,
+            softClipperEnabled = softClipperEnabled,
             performanceMode = performanceMode
         )
     }
@@ -67,6 +83,12 @@ data class VexPlayerBridgeConfig(
                 preampMb = (safe.preampDb * 100f).roundToInt(),
                 autoHeadroom = safe.autoHeadroom,
                 limiterEnabled = safe.limiterEnabled,
+                compressorEnabled = safe.compressorEnabled,
+                compressorThresholdDb = safe.compressorThresholdDb,
+                compressorRatio = safe.compressorRatio,
+                compressorAttackMs = safe.compressorAttackMs,
+                compressorReleaseMs = safe.compressorReleaseMs,
+                softClipperEnabled = safe.softClipperEnabled,
                 parametricBands = safe.parametricBands.map {
                     BridgeParametricBand(
                         frequencyHz = it.frequencyHz.roundToInt().coerceIn(20, 22_000),
