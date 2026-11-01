@@ -40,6 +40,7 @@ fun SpectrumStudioScreen(
     bridgeState: VexPlayerBridgeState
 ) {
     val frame by bridgeClient.spectrumFrame.collectAsState()
+    val spectrumError by bridgeClient.spectrumError.collectAsState()
     var showBars by remember { mutableStateOf(true) }
     var showWave by remember { mutableStateOf(true) }
 
@@ -74,6 +75,9 @@ fun SpectrumStudioScreen(
                     color = AnalyzerMuted,
                     style = MaterialTheme.typography.bodySmall
                 )
+                spectrumError?.let {
+                    Text(it, color = Color(0xFFFFB86B), style = MaterialTheme.typography.bodySmall)
+                }
             }
         }
 
@@ -100,6 +104,7 @@ fun SpectrumStudioScreen(
                                 bridgeState.status !in setOf(VexPlayerBridgeStatus.READY, VexPlayerBridgeStatus.CONNECTED) ->
                                     "Waiting for VEXPlayer connection"
                                 !showBars && !showWave -> "Enable at least one visual layer"
+                                spectrumError != null -> spectrumError!!
                                 else -> "Play a track in VEXPlayer to start the analyzer"
                             },
                             color = AnalyzerMuted
