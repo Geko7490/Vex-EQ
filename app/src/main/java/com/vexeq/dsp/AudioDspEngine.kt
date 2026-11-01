@@ -12,7 +12,7 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 
 enum class DspPerformanceMode(val bandStride: Int, val maxParametricBands: Int) {
-    LOW(4, 2), MID(2, 4), HIGH(1, 8)
+    LOW(4, 4), MID(2, 8), HIGH(1, 16)
 }
 
 data class ParametricBand(
@@ -317,7 +317,7 @@ class AudioDspEngine(
             630, 800, 1_000, 1_250, 1_600, 2_000, 2_500, 3_150, 4_000, 5_000,
             6_300, 8_000, 10_000, 12_500, 16_000, 20_000
         )
-        const val MAX_PARAMETRIC_BANDS = 8
+        const val MAX_PARAMETRIC_BANDS = 16
         private const val GRAPHIC_Q = 4.318f
         private const val BASS_THRESHOLD = 0.48f
         private const val BASS_RATIO = 2.5f
