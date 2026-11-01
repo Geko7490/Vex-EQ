@@ -3,6 +3,7 @@ package com.vexeq.bridge
 import com.vexeq.dsp.DspSettings
 import com.vexeq.dsp.DspPerformanceMode
 import com.vexeq.dsp.ParametricBand
+import com.vexeq.dsp.ParametricFilterType
 import kotlin.math.roundToInt
 
 /**
@@ -42,7 +43,8 @@ data class VexPlayerBridgeConfig(
             parametricBands.size <= 16 &&
             parametricBands.all {
                 it.frequencyHz in 20..22_000 && it.gainMb in -1_200..1_200 &&
-                    it.q.isFinite() && it.q in 0.3f..10f
+                    it.q.isFinite() && it.q in 0.3f..10f &&
+                    it.filterType in ParametricFilterType.values().map { type -> type.name }
             }
 
     fun toDspSettings(performanceMode: DspPerformanceMode = DspPerformanceMode.HIGH): DspSettings? {
@@ -51,7 +53,14 @@ data class VexPlayerBridgeConfig(
             enabled = enabled,
             graphicGainsDb = graphicBandLevelsMb.map { it / 100f },
             parametricBands = parametricBands.map {
-                com.vexeq.dsp.ParametricBand(it.frequencyHz.toFloat(), it.gainMb / 100f, it.q)
+                ParametricBand(
+                    frequencyHz = it.frequencyHz.toFloat(),
+                    gainDb = it.gainMb / 100f,
+                    q = it.q,
+                    filterType = runCatching { ParametricFilterType.valueOf(it.filterType) }
+                        .getOrDefault(ParametricFilterType.BELL),
+                    enabled = it.enabled
+                )
             },
             bassBoost = bassStrength / 1_000f,
             stereoWidth = stereoWidth / 1_000f,
@@ -69,7 +78,7 @@ data class VexPlayerBridgeConfig(
     }
 
     companion object {
-        const val CURRENT_PROTOCOL_VERSION = 1
+        const val CURRENT_PROTOCOL_VERSION = 2
 
         fun fromDspSettings(settings: DspSettings): VexPlayerBridgeConfig {
             // VEXPlayer's host DSP supports all eight PEQ bands regardless of VEX EQ's
@@ -93,7 +102,9 @@ data class VexPlayerBridgeConfig(
                     BridgeParametricBand(
                         frequencyHz = it.frequencyHz.roundToInt().coerceIn(20, 22_000),
                         gainMb = (it.gainDb * 100f).roundToInt(),
-                        q = it.q
+                        q = it.q,
+                        filterType = it.filterType.name,
+                        enabled = it.enabled
                     )
                 }
             )
@@ -104,5 +115,7 @@ data class VexPlayerBridgeConfig(
 data class BridgeParametricBand(
     val frequencyHz: Int,
     val gainMb: Int,
-    val q: Float
+    val q: Float,
+    val filterType: String = "BELL",
+    val enabled: Boolean = true
 )
