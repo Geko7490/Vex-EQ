@@ -30,6 +30,12 @@ data class DspSettings(
     val preampDb: Float = 0f,
     val autoHeadroom: Boolean = true,
     val limiterEnabled: Boolean = true,
+    val compressorEnabled: Boolean = false,
+    val compressorThresholdDb: Float = -18f,
+    val compressorRatio: Float = 4f,
+    val compressorAttackMs: Float = 10f,
+    val compressorReleaseMs: Float = 120f,
+    val softClipperEnabled: Boolean = false,
     val performanceMode: DspPerformanceMode = DspPerformanceMode.HIGH
 ) {
     fun sanitized(): DspSettings = copy(
@@ -44,7 +50,11 @@ data class DspSettings(
         },
         bassBoost = if (bassBoost.isFinite()) bassBoost.coerceIn(0f, 1f) else 0f,
         stereoWidth = if (stereoWidth.isFinite()) stereoWidth.coerceIn(0f, 1f) else 0f,
-        preampDb = if (preampDb.isFinite()) preampDb.coerceIn(-12f, 6f) else 0f
+        preampDb = if (preampDb.isFinite()) preampDb.coerceIn(-12f, 6f) else 0f,
+        compressorThresholdDb = if (compressorThresholdDb.isFinite()) compressorThresholdDb.coerceIn(-36f, 0f) else -18f,
+        compressorRatio = if (compressorRatio.isFinite()) compressorRatio.coerceIn(1f, 20f) else 4f,
+        compressorAttackMs = if (compressorAttackMs.isFinite()) compressorAttackMs.coerceIn(1f, 100f) else 10f,
+        compressorReleaseMs = if (compressorReleaseMs.isFinite()) compressorReleaseMs.coerceIn(10f, 1_000f) else 120f
     )
 }
 
@@ -94,7 +104,10 @@ class AudioDspEngine(
         private val bassEnvelope = FloatArray(channels)
         private val sampleScratch = FloatArray(channels)
         private var limiterGain = 1f
+        private var compressorEnvelope = 0f
         private val limiterRelease = (1f - exp(-1f / (rate * 0.08f))).coerceIn(0.000001f, 1f)
+        private val compressorAttack = exp(-1f / (rate * settings.compressorAttackMs / 1_000f)).coerceIn(0f, 0.99999f)
+        private val compressorRelease = exp(-1f / (rate * settings.compressorReleaseMs / 1_000f)).coerceIn(0f, 0.99999f)
         private val outputGain: Float
 
         init {
@@ -189,6 +202,41 @@ class AudioDspEngine(
                     sampleScratch[1] = mid - side
                 }
 
+                if (active && settings.compressorEnabled) {
+                    var detector = 0f
+                    ch = 0
+                    while (ch < channels) {
+                        detector = max(detector, abs(sampleScratch[ch]))
+                        ch++
+                    }
+                    val coefficient = if (detector > compressorEnvelope) compressorAttack else compressorRelease
+                    compressorEnvelope = coefficient * compressorEnvelope + (1f - coefficient) * detector
+                    val levelDb = 20f * log10(compressorEnvelope.coerceAtLeast(1e-7f))
+                    if (levelDb > settings.compressorThresholdDb) {
+                        val compressedDb = settings.compressorThresholdDb +
+                            (levelDb - settings.compressorThresholdDb) / settings.compressorRatio
+                        val gain = dbToLinear(compressedDb - levelDb)
+                        ch = 0
+                        while (ch < channels) {
+                            sampleScratch[ch] *= gain
+                            ch++
+                        }
+                    }
+                }
+
+                if (active && settings.softClipperEnabled) {
+                    ch = 0
+                    while (ch < channels) {
+                        val sample = sampleScratch[ch]
+                        val magnitude = abs(sample)
+                        if (magnitude > 0.90f) {
+                            val curved = 0.90f + 0.10f * kotlin.math.tanh(((magnitude - 0.90f) / 0.10f).toDouble()).toFloat()
+                            sampleScratch[ch] = kotlin.math.sign(sample) * curved
+                        }
+                        ch++
+                    }
+                }
+
                 var peak = 0f
                 ch = 0
                 while (ch < channels) {
@@ -225,6 +273,7 @@ class AudioDspEngine(
             bassFilter.reset()
             bassEnvelope.fill(0f)
             limiterGain = 1f
+            compressorEnvelope = 0f
         }
 
         private fun estimatePeakResponseDb(): Float {
