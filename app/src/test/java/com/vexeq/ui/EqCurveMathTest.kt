@@ -24,4 +24,18 @@ class EqCurveMathTest {
         val centerIndex = (ln(1_000.0 / 20.0) / ln(20_000.0 / 20.0) * 159).toInt()
         assertTrue(boosted[centerIndex] > flat[centerIndex] + 4f)
     }
+    @Test
+    fun graphFrequencyMappingUsesLogarithmicRange() {
+        assertEquals(20f, frequencyAt(0f, 1000f), 0.01f)
+        assertEquals(20_000f, frequencyAt(1000f, 1000f), 1f)
+        assertEquals(632.46f, frequencyAt(500f, 1000f), 1f)
+    }
+
+    @Test
+    fun graphGainMappingClampsToSupportedPeqRange() {
+        assertEquals(12f, gainAt(0f, 100f), 0.001f)
+        assertEquals(0f, gainAt(50f, 100f), 0.001f)
+        assertEquals(-12f, gainAt(100f, 100f), 0.001f)
+    }
+
 }
