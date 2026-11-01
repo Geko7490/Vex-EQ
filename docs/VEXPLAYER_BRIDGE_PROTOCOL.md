@@ -83,6 +83,20 @@ The host reuses its existing visualizer capture with consumer leases. VEX EQ mus
 
 **Stereo/phase limitation:** the current spectrum contract is mono-analysis data. It does not contain separate left/right samples, channel correlation, or phase measurements. VEX EQ must not display fabricated stereo meters or phase correlation. Those require a future host protocol extension backed by channel-separated analysis from VEXPlayer.
 
+## Optional stereo-analysis extension (backward compatible v2 keys)
+
+The VEX EQ client accepts these optional spectrum Bundle fields without requiring a protocol-version bump:
+
+| Key | Type | Meaning |
+|---|---|---|
+| `spectrumLeftMagnitudes` | float[64] | Normalized logarithmic left-channel FFT magnitudes |
+| `spectrumRightMagnitudes` | float[64] | Normalized logarithmic right-channel FFT magnitudes |
+| `spectrumPhaseCorrelation` | finite float [-1, 1] | Wideband L/R normalized cross-correlation |
+
+If the host omits either channel array, the UI reports stereo analysis as unavailable. It must never duplicate the mono spectrum and label it as L/R. Phase correlation is shown only when the host supplies a finite value. Interpret +1 as in-phase, 0 as uncorrelated, and -1 as inverted; it is a wideband correlation indicator, not a frequency-dependent phase response.
+
+The VEXPlayer host must calculate these values from the actual left and right playback channels before emitting the optional keys. Until that host-side implementation and device validation exist, these panels remain explicitly unavailable. No microphone, loopback, or second DSP processor is permitted.
+
 ## Failure and release validation
 
 Missing VEXPlayer, denied signature permission, incompatible protocol, binder death, malformed data, stale revisions, or rejected settings must produce a clear error state. VEXPlayer playback must continue using its own saved DSP state.
