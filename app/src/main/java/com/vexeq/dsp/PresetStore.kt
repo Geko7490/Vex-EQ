@@ -46,7 +46,10 @@ class PresetStore(context: Context) {
     fun save(name: String, settings: DspSettings): Boolean {
         val cleanName = name.trim().take(40)
         if (cleanName.isEmpty()) return false
-        val presets = list().filterNot { it.name.equals(cleanName, ignoreCase = true) }
+        val existing = list()
+        val isNewName = existing.none { it.name.equals(cleanName, ignoreCase = true) }
+        if (isNewName && existing.size >= MAX_SAVED_PRESETS) return false
+        val presets = existing.filterNot { it.name.equals(cleanName, ignoreCase = true) }
             .toMutableList()
         presets += EqPreset(cleanName, settings.sanitized(), System.currentTimeMillis())
         return persist(presets)
@@ -72,6 +75,7 @@ class PresetStore(context: Context) {
 
     @Synchronized
     fun importJson(json: String): Int {
+        require(json.length <= MAX_IMPORT_CHARS) { "Preset file is too large" }
         val root = JSONObject(json)
         require(root.optString("format") == "vex-eq-presets") { "Not a VEX EQ preset file" }
         require(root.optInt("version", -1) == EXPORT_VERSION) { "Unsupported preset file version" }
@@ -87,11 +91,15 @@ class PresetStore(context: Context) {
             merged[name.lowercase()] = EqPreset(name, settings.decodeSettings(), item.optLong("updatedAt"))
             imported++
         }
+        require(merged.size <= MAX_SAVED_PRESETS) {
+            "Import would exceed the $MAX_SAVED_PRESETS preset limit"
+        }
         check(persist(merged.values.toList())) { "Could not save imported presets" }
         return imported
     }
 
     private fun persist(presets: List<EqPreset>): Boolean = runCatching {
+        require(presets.size <= MAX_SAVED_PRESETS)
         val array = JSONArray()
         presets.forEach { preset ->
             array.put(JSONObject().put("name", preset.name)
@@ -150,5 +158,12 @@ class PresetStore(context: Context) {
         ).sanitized()
     }
 
-    companion object { private const val KEY_PRESETS = "presets"; private const val KEY_LAST_SETTINGS = "last_settings"; private const val EXPORT_VERSION = 1; private const val MAX_IMPORTED_PRESETS = 100 }
+    companion object {
+        private const val KEY_PRESETS = "presets"
+        private const val KEY_LAST_SETTINGS = "last_settings"
+        private const val EXPORT_VERSION = 1
+        private const val MAX_IMPORTED_PRESETS = 100
+        private const val MAX_SAVED_PRESETS = 100
+        private const val MAX_IMPORT_CHARS = 1_048_576
+    }
 }
