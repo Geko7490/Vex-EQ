@@ -39,7 +39,6 @@ class NextGenSpectrumView(context: Context) : View(context) {
 
     init {
         setLayerType(LAYER_TYPE_HARDWARE, null)
-        isOpaque = false
     }
 
     fun submitFrame(frame: BridgeSpectrumFrame, bars: Boolean, wave: Boolean) {
