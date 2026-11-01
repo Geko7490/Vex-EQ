@@ -115,7 +115,8 @@ class PresetStore(context: Context) {
         put("parametricBands", JSONArray().apply {
             parametricBands.forEach { band ->
                 put(JSONObject().put("frequencyHz", band.frequencyHz)
-                    .put("gainDb", band.gainDb).put("q", band.q))
+                    .put("gainDb", band.gainDb).put("q", band.q)
+                    .put("filterType", band.filterType.name).put("enabled", band.enabled))
             }
         })
         put("bassBoost", bassBoost)
@@ -144,7 +145,11 @@ class PresetStore(context: Context) {
                 add(ParametricBand(
                     frequencyHz = item.optDouble("frequencyHz", 1_000.0).toFloat(),
                     gainDb = item.optDouble("gainDb", 0.0).toFloat(),
-                    q = item.optDouble("q", 1.0).toFloat()
+                    q = item.optDouble("q", 1.0).toFloat(),
+                    filterType = runCatching {
+                        ParametricFilterType.valueOf(item.optString("filterType", "BELL"))
+                    }.getOrDefault(ParametricFilterType.BELL),
+                    enabled = item.optBoolean("enabled", true)
                 ))
             }
         }
