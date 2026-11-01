@@ -98,11 +98,24 @@ class AudioDspEngine(
         private val outputGain: Float
 
         init {
-            graphicFilters = AudioDspEngine.BAND_FREQUENCIES.mapIndexedNotNull { index, frequency ->
-                if (index % settings.performanceMode.bandStride != 0 && index != AudioDspEngine.BAND_FREQUENCIES.lastIndex) return@mapIndexedNotNull null
-                val gain = settings.graphicGainsDb[index]
+            val selectedBandIndices = AudioDspEngine.BAND_FREQUENCIES.indices.filter { index ->
+                index % settings.performanceMode.bandStride == 0 ||
+                    index == AudioDspEngine.BAND_FREQUENCIES.lastIndex
+            }
+            val selectedGains = AudioDspEngine.resampleGains(
+                settings.graphicGainsDb, selectedBandIndices.size
+            )
+            graphicFilters = selectedBandIndices.mapIndexedNotNull { slot, bandIndex ->
+                val gain = selectedGains[slot]
                 if (abs(gain) < 0.0001f) null
-                else Biquad(peaking(frequency.toFloat(), gain, AudioDspEngine.GRAPHIC_Q), channels)
+                else Biquad(
+                    peaking(
+                        AudioDspEngine.BAND_FREQUENCIES[bandIndex].toFloat(),
+                        gain,
+                        AudioDspEngine.GRAPHIC_Q
+                    ),
+                    channels
+                )
             }.toTypedArray()
             parametricFilters = settings.parametricBands.mapNotNull { band ->
                 if (abs(band.gainDb) < 0.0001f) null
