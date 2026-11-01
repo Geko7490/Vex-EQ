@@ -18,6 +18,7 @@ import com.vexeq.compat.CompatibilityEngine
 import com.vexeq.compat.CompatibilityReport
 import com.vexeq.dsp.AudioDspEngine
 import com.vexeq.dsp.DspSettings
+import com.vexeq.dsp.DspPerformanceMode
 import com.vexeq.dsp.ParametricBand
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -79,6 +80,31 @@ private fun EqualizerScreen() {
                 }
                 Text("DSP engine initialized · PCM host integration is the next stage",
                     color = VexTextMuted, style = MaterialTheme.typography.bodySmall)
+            }
+        }
+
+        Card(colors = CardDefaults.cardColors(containerColor = VexPanel)) {
+            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Processing Mode", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    when (settings.performanceMode) {
+                        DspPerformanceMode.LOW -> "Low · 9 graphic filters · up to 2 parametric bands"
+                        DspPerformanceMode.MID -> "Mid · 16 graphic filters · up to 4 parametric bands"
+                        DspPerformanceMode.HIGH -> "High · 31 graphic filters · up to 8 parametric bands"
+                    },
+                    color = VexTextMuted, style = MaterialTheme.typography.bodySmall
+                )
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    DspPerformanceMode.values().forEach { mode ->
+                        Button(
+                            onClick = { settings = settings.copy(performanceMode = mode) },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (settings.performanceMode == mode) VexPurple else VexBackground
+                            )
+                        ) { Text(mode.name) }
+                    }
+                }
             }
         }
 
