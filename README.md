@@ -4,13 +4,13 @@ Standalone Android audio equalizer and DSP companion with an optional advanced V
 
 ## Project status
 
-The native Android foundation, compatibility dashboard, first PCM DSP core, interactive 31-band EQ controls, and automated build/test workflow are in place. The DSP core is implemented and unit-tested as a reusable PCM processing component. It is **not yet connected to Android's global output or VEXPlayer playback**, so the current UI clearly labels playback-host integration as pending.
+The native Android foundation, compatibility dashboard, PCM DSP core, interactive 31-band graphic EQ and 8-band parametric EQ controls, and automated build/test workflow are in place. The DSP core is implemented and unit-tested as a reusable PCM processing component. It is **not yet connected to Android's global output or VEXPlayer playback**, so the current UI clearly labels playback-host integration as pending.
 
 ## Product direction
 
 - Native Android application (Kotlin, Jetpack Compose).
 - 31-band graphic EQ with per-band gain control (-12 dB to +12 dB).
-- Reusable float-PCM DSP core with up to 8 parametric peaking bands, Bass Boost, Stereo Width, Preamp, automatic headroom, and output limiter.
+- Reusable float-PCM DSP core with up to 8 parametric peaking bands, Bass Boost, Stereo Width, Preamp, automatic headroom, and output limiter. DSP settings are published as fresh processing states so the audio processing thread does not wait for settings locks.
 - Compatibility engine that reports platform audio-effect availability without claiming unsupported global processing.
 - VEXPlayer remains fully functional when VEX EQ is absent or disconnected.
 - VEXPlayer's built-in EQ and DSP remain in the app. VEX EQ adds an optional advanced VEXPlayer mode with synchronized controls and profiles; the integration must prevent duplicate processing rather than remove the player's native EQ.
