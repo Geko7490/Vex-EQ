@@ -249,7 +249,7 @@ class NextGenSpectrumView(context: Context) : View(context) {
         thinPaint.strokeWidth = bandHeight
         canvas.drawLine(0f, y, width * (0.18f + intensity * 0.55f), y, thinPaint)
         thinPaint.color = pink
-        canvas.drawLine(width * 0.62f, (y + bandHeight * 2f) % height, width.toFloat(), (y + bandHeight * 2f) % height, thinPaint)
+        canvas.drawLine(width * 0.62f, (y + bandHeight * 2f) % height, width.toFloat(), (y + bandHeight * 2f) % height.toFloat(), thinPaint)
     }
 
     private fun colorForIndex(index: Int, count: Int): Int {
