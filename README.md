@@ -29,3 +29,18 @@ The current app creates the DSP engine for UI configuration only. A supported An
 ## Development
 
 Work is performed on feature branches and proposed through pull requests. GitHub Actions runs Android lint, unit tests, debug/release APK assembly, and release AAB assembly. See the repository's Actions tab for the latest CI result.
+
+## VEXPlayer advanced-mode integration
+
+The VEXPlayer repository has been inspected. Its Android application ID is `com.vexmusic.player`, and it already owns a Media3 `SoftwareEqualizerAudioProcessor` inside `PlaybackService`. Its controller exposes the same 31 graphic bands, up to 8 parametric bands, Bass Boost, stereo width, preamp, automatic headroom, and limiter controls.
+
+**Integration ownership rule:** VEXPlayer remains the playback host and owns the only PCM DSP stage for its own playback. VEX EQ's advanced mode will send a versioned settings payload to VEXPlayer; it will not run `AudioDspEngine` on top of VEXPlayer's processor. The VEXPlayer app's ordinary EQ screen remains available and is synchronized through the same controller/settings state.
+
+The first transport-neutral contract is implemented in `VexPlayerBridgeConfig`:
+- Protocol version is explicit and unknown versions are rejected.
+- EQ gain values convert from dB to VEXPlayer's integer millibel units (dB × 100).
+- Bass and stereo width convert from 0..1 to 0..1000.
+- Parametric band values convert to VEXPlayer's frequency/gain/Q representation.
+- Payload validation checks band counts and supported ranges before a future transport can apply it.
+
+The transport and VEXPlayer-side receiver are **not yet implemented**. Before enabling cross-app writes, both apps need a secure authenticated IPC contract, request/acknowledgement flow, conflict resolution when the user edits EQ in either app, and a shared release-signing strategy or another verified caller-authentication mechanism. Until then, compatibility scanning only detects the installed package and does not modify it.
