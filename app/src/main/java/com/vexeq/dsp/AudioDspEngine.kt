@@ -30,7 +30,7 @@ data class DspSettings(
     fun sanitized(): DspSettings = copy(
         graphicGainsDb = AudioDspEngine.resampleGains(graphicGainsDb, AudioDspEngine.BAND_FREQUENCIES.size)
             .map { it.coerceIn(-12f, 12f) },
-        parametricBands = parametricBands.take(AudioDspEngine.MAX_PARAMETRIC_BANDS).map {
+        parametricBands = parametricBands.take(performanceMode.maxParametricBands).map {
             it.copy(
                 frequencyHz = it.frequencyHz.coerceIn(20f, 20_000f),
                 gainDb = it.gainDb.coerceIn(-12f, 12f),
