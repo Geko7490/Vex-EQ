@@ -34,17 +34,17 @@ data class DspSettings(
 ) {
     fun sanitized(): DspSettings = copy(
         graphicGainsDb = AudioDspEngine.resampleGains(graphicGainsDb, AudioDspEngine.BAND_FREQUENCIES.size)
-            .map { it.coerceIn(-12f, 12f) },
+            .map { if (it.isFinite()) it.coerceIn(-12f, 12f) else 0f },
         parametricBands = parametricBands.take(performanceMode.maxParametricBands).map {
             it.copy(
-                frequencyHz = it.frequencyHz.coerceIn(20f, 20_000f),
-                gainDb = it.gainDb.coerceIn(-12f, 12f),
-                q = it.q.coerceIn(0.3f, 10f)
+                frequencyHz = if (it.frequencyHz.isFinite()) it.frequencyHz.coerceIn(20f, 20_000f) else 1_000f,
+                gainDb = if (it.gainDb.isFinite()) it.gainDb.coerceIn(-12f, 12f) else 0f,
+                q = if (it.q.isFinite()) it.q.coerceIn(0.3f, 10f) else 1f
             )
         },
-        bassBoost = bassBoost.coerceIn(0f, 1f),
-        stereoWidth = stereoWidth.coerceIn(0f, 1f),
-        preampDb = preampDb.coerceIn(-12f, 6f)
+        bassBoost = if (bassBoost.isFinite()) bassBoost.coerceIn(0f, 1f) else 0f,
+        stereoWidth = if (stereoWidth.isFinite()) stereoWidth.coerceIn(0f, 1f) else 0f,
+        preampDb = if (preampDb.isFinite()) preampDb.coerceIn(-12f, 6f) else 0f
     )
 }
 
