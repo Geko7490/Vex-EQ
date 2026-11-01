@@ -73,6 +73,8 @@ class VexPlayerBridgeClient(context: Context) {
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
+            spectrumSubscribed = false
+            mutableSpectrumFrame.value = BridgeSpectrumFrame()
             serviceMessenger = null
             mutableState.value = mutableState.value.copy(
                 status = VexPlayerBridgeStatus.DISCONNECTED,
@@ -81,6 +83,8 @@ class VexPlayerBridgeClient(context: Context) {
         }
 
         override fun onBindingDied(name: ComponentName?) {
+            spectrumSubscribed = false
+            mutableSpectrumFrame.value = BridgeSpectrumFrame()
             serviceMessenger = null
             mutableState.value = mutableState.value.copy(
                 status = VexPlayerBridgeStatus.ERROR,
@@ -89,6 +93,8 @@ class VexPlayerBridgeClient(context: Context) {
         }
 
         override fun onNullBinding(name: ComponentName?) {
+            spectrumSubscribed = false
+            mutableSpectrumFrame.value = BridgeSpectrumFrame()
             serviceMessenger = null
             mutableState.value = mutableState.value.copy(
                 status = VexPlayerBridgeStatus.ERROR,
@@ -221,11 +227,11 @@ class VexPlayerBridgeClient(context: Context) {
 
     private fun acceptSpectrumFrame(data: Bundle) {
         val magnitudes = data.getFloatArray(KEY_SPECTRUM_MAGNITUDES)?.take(SPECTRUM_BANDS)
-            ?.map { if (it.isFinite()) it.coerceIn(0f, 1f) else 0f }?.toFloatArray().orEmptyFloatArray()
+            ?.map { if (it.isFinite()) it.coerceIn(0f, 1f) else 0f }?.toFloatArray() ?: FloatArray(0)
         val peaks = data.getFloatArray(KEY_SPECTRUM_PEAKS)?.take(SPECTRUM_BANDS)
             ?.map { if (it.isFinite()) it.coerceIn(0f, 1f) else 0f }?.toFloatArray().orEmptyFloatArray()
         val waveform = data.getFloatArray(KEY_SPECTRUM_WAVEFORM)?.take(SPECTRUM_WAVE_POINTS)
-            ?.map { if (it.isFinite()) it.coerceIn(-1f, 1f) else 0f }?.toFloatArray().orEmptyFloatArray()
+            ?.map { if (it.isFinite()) it.coerceIn(-1f, 1f) else 0f }?.toFloatArray() ?: FloatArray(0)
         mutableSpectrumFrame.value = BridgeSpectrumFrame(
             magnitudes = magnitudes,
             peaks = peaks,
@@ -238,8 +244,6 @@ class VexPlayerBridgeClient(context: Context) {
             timestampNanos = data.getLong(KEY_SPECTRUM_TIMESTAMP)
         )
     }
-
-    private fun List<Float>?.orEmptyFloatArray(): FloatArray = this?.toFloatArray() ?: FloatArray(0)
 
     private fun acceptHostState(data: Bundle, status: VexPlayerBridgeStatus) {
         val config = parseConfig(data)
