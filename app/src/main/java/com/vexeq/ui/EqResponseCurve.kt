@@ -52,6 +52,10 @@ fun EqResponseCurve(
     modifier: Modifier = Modifier
 ) {
     val points = EqCurveMath.buildCurve(graphicGainsDb, parametricBands)
+    val latestBands by androidx.compose.runtime.rememberUpdatedState(parametricBands)
+    val latestSelectedBand by androidx.compose.runtime.rememberUpdatedState(selectedBandIndex)
+    val latestOnSelectBand by androidx.compose.runtime.rememberUpdatedState(onSelectBand)
+    val latestOnBandChange by androidx.compose.runtime.rememberUpdatedState(onBandChange)
     Surface(
         modifier = modifier.fillMaxWidth(),
         color = Color(0xFF141319),
@@ -68,31 +72,31 @@ fun EqResponseCurve(
             Canvas(
                 modifier = Modifier.fillMaxWidth().height(164.dp).padding(top = 8.dp, bottom = 4.dp)
                     .background(Color(0xFF101014))
-                    .pointerInput(parametricBands) {
+                    .pointerInput(Unit) {
                         detectTapGestures { offset ->
-                            val index = nearestBand(parametricBands, offset.x, offset.y, size.width.toFloat(), size.height.toFloat())
-                            if (index >= 0) onSelectBand(index)
+                            val index = nearestBand(latestBands, offset.x, offset.y, size.width.toFloat(), size.height.toFloat())
+                            if (index >= 0) latestOnSelectBand(index)
                         }
                     }
-                    .pointerInput(parametricBands, selectedBandIndex) {
+                    .pointerInput(Unit) {
                         var dragIndex = -1
                         detectDragGestures(
                             onDragStart = { offset ->
-                                dragIndex = if (selectedBandIndex in parametricBands.indices) selectedBandIndex
-                                else nearestBand(parametricBands, offset.x, offset.y, size.width.toFloat(), size.height.toFloat())
-                                if (dragIndex >= 0) onSelectBand(dragIndex)
+                                dragIndex = if (latestSelectedBand in latestBands.indices) latestSelectedBand
+                                else nearestBand(latestBands, offset.x, offset.y, size.width.toFloat(), size.height.toFloat())
+                                if (dragIndex >= 0) latestOnSelectBand(dragIndex)
                             },
                             onDragEnd = { dragIndex = -1 },
                             onDragCancel = { dragIndex = -1 }
                         ) { change, _ ->
-                            if (dragIndex in parametricBands.indices) {
+                            if (dragIndex in latestBands.indices) {
                                 val width = size.width.toFloat().coerceAtLeast(1f)
                                 val height = size.height.toFloat().coerceAtLeast(1f)
-                                val updated = parametricBands[dragIndex].copy(
+                                val updated = latestBands[dragIndex].copy(
                                     frequencyHz = frequencyAt(change.position.x, width),
                                     gainDb = gainAt(change.position.y, height)
                                 )
-                                onBandChange(dragIndex, updated)
+                                latestOnBandChange(dragIndex, updated)
                             }
                             change.consume()
                         }
@@ -126,12 +130,12 @@ fun EqResponseCurve(
                     if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
                 }
                 drawPath(path, GraphPurple, style = Stroke(width = 2.6f))
-                parametricBands.forEachIndexed { index, band ->
+                latestBands.forEachIndexed { index, band ->
                     val x = (ln(band.frequencyHz.coerceIn(20f, 20_000f).toDouble() / 20.0) /
                         ln(20_000.0 / 20.0) * (right - left)).toFloat() + left
                     val y = zeroY - (band.gainDb.coerceIn(-18f, 18f) / 36f) * graphHeight
                     drawCircle(
-                        color = if (index == selectedBandIndex) Color.White else GraphPurple,
+                        color = if (index == latestSelectedBand) Color.White else GraphPurple,
                         radius = if (index == selectedBandIndex) 6f else 4f,
                         center = Offset(x, y)
                     )
