@@ -223,6 +223,38 @@ private fun StereoPhaseCard(frame: com.vexeq.bridge.BridgeSpectrumFrame) {
                     style = MaterialTheme.typography.bodySmall
                 )
             }
+            val width = frame.stereoWidth
+            if (width != null) {
+                Text(
+                    "STEREO WIDTH INDEX  ${(width * 100f).toInt()}%",
+                    color = AnalyzerMuted,
+                    style = MaterialTheme.typography.labelMedium
+                )
+                Canvas(Modifier.fillMaxWidth().height(14.dp)) {
+                    drawLine(Color(0xFF383340), Offset(0f, size.height / 2f), Offset(size.width, size.height / 2f), 5f)
+                    drawLine(Color(0xFF38C8D8), Offset(0f, size.height / 2f), Offset(size.width * width, size.height / 2f), 5f)
+                }
+                Text(
+                    when {
+                        width < 0.08f -> "Near-mono: little side-channel energy"
+                        width < 0.35f -> "Narrow to moderate stereo side energy"
+                        else -> "Strong side-channel energy"
+                    },
+                    color = AnalyzerMuted,
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Text(
+                    "Mid/Side energy share · 0% = mono, 100% = side-only. This is an energy index, not a psychoacoustic width guarantee.",
+                    color = AnalyzerMuted,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            } else {
+                Text(
+                    "Stereo width unavailable · waiting for real post-DSP L/R PCM analysis.",
+                    color = AnalyzerMuted,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
             val correlation = frame.phaseCorrelation
             if (correlation != null) {
                 Text(
