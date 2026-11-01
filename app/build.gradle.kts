@@ -61,5 +61,6 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
     debugImplementation("androidx.compose.ui:ui-tooling")
+    implementation("org.apache.commons:commons-math3:3.6.1")
     testImplementation("junit:junit:4.13.2")
 }
