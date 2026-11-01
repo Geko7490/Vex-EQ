@@ -13,9 +13,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Shapes
+import com.vexeq.ui.EqResponseCurve
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.text.KeyboardOptions
 import com.vexeq.compat.CompatibilityEngine
 import com.vexeq.compat.CompatibilityReport
 import com.vexeq.bridge.VexPlayerBridgeClient
@@ -46,6 +51,10 @@ class MainActivity : ComponentActivity() {
             MaterialTheme(colorScheme = darkColorScheme(
                 primary = VexPurple, background = VexBackground, surface = VexPanel,
                 onBackground = Color(0xFFF5F3F8), onSurface = Color(0xFFF5F3F8)
+            ), shapes = Shapes(
+                small = RoundedCornerShape(3.dp),
+                medium = RoundedCornerShape(4.dp),
+                large = RoundedCornerShape(6.dp)
             )) {
                 Surface(Modifier.fillMaxSize(), color = VexBackground) { VexEqHome() }
             }
@@ -61,16 +70,43 @@ private fun VexEqHome() {
     LaunchedEffect(Unit) { bridgeClient.bind() }
     DisposableEffect(bridgeClient) { onDispose { bridgeClient.close() } }
     var selectedTab by remember { mutableIntStateOf(0) }
-    Column(Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 12.dp)) {
-        Text("VEX EQ", color = VexPurple, fontSize = 30.sp, style = MaterialTheme.typography.headlineLarge)
-        Text("PRECISION AUDIO CONTROL", color = VexTextMuted, style = MaterialTheme.typography.labelMedium)
-        Spacer(Modifier.height(14.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { selectedTab = 0 }, modifier = Modifier.weight(1f)) { Text("Equalizer") }
-            Button(onClick = { selectedTab = 1 }, modifier = Modifier.weight(1f)) { Text("Compatibility") }
+    Column(Modifier.fillMaxSize()) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("VEX EQ", color = VexPurple, fontSize = 27.sp,
+                    style = MaterialTheme.typography.headlineLarge)
+                Text("PRECISION AUDIO CONTROL", color = VexTextMuted,
+                    style = MaterialTheme.typography.labelSmall)
+            }
+            TextButton(onClick = { selectedTab = 5 }) { Text("⚙") }
         }
-        Spacer(Modifier.height(10.dp))
-        if (selectedTab == 0) EqualizerScreen(bridgeClient, bridgeState) else CompatibilityScreen()
+        Box(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 14.dp)) {
+            when (selectedTab) {
+                0 -> HomeDashboardScreen(
+                    bridgeClient, bridgeState,
+                    openEqualizer = { selectedTab = 1 },
+                    openAnalyzer = { selectedTab = 2 }
+                )
+                1 -> EqualizerScreen(bridgeClient, bridgeState)
+                2 -> SpectrumStudioScreen(bridgeClient, bridgeState)
+                3 -> StudioModulesScreen(bridgeClient, bridgeState)
+                4 -> PresetLibraryScreen(bridgeClient, bridgeState)
+                else -> CompatibilityScreen()
+            }
+        }
+        NavigationBar(containerColor = VexPanel) {
+            listOf("Home", "Equalizer", "Analyzer", "Studio", "Presets").forEachIndexed { index, label ->
+                NavigationBarItem(
+                    selected = selectedTab == index,
+                    onClick = { selectedTab = index },
+                    icon = { Text(label.take(1), color = if (selectedTab == index) VexPurple else VexTextMuted) },
+                    label = { Text(label, style = MaterialTheme.typography.labelSmall) }
+                )
+            }
+        }
     }
 }
 
@@ -113,6 +149,32 @@ private fun EqualizerScreen(bridgeClient: VexPlayerBridgeClient, bridgeState: Ve
         }
     }
     var settings by remember { mutableStateOf(presetStore.loadLastSettings()) }
+    var undoStack by remember { mutableStateOf<List<DspSettings>>(emptyList()) }
+    var redoStack by remember { mutableStateOf<List<DspSettings>>(emptyList()) }
+    var aSettings by remember { mutableStateOf<DspSettings?>(null) }
+    var bSettings by remember { mutableStateOf<DspSettings?>(null) }
+    var showingA by remember { mutableStateOf(false) }
+    fun commitSettings(next: DspSettings) {
+        if (next != settings) {
+            undoStack = (undoStack + settings).takeLast(100)
+            redoStack = emptyList()
+            settings = next
+        }
+    }
+    fun undoSettings() {
+        val previous = undoStack.lastOrNull() ?: return
+        redoStack = (redoStack + settings).takeLast(100)
+        undoStack = undoStack.dropLast(1)
+        settings = previous
+    }
+    fun redoSettings() {
+        val next = redoStack.lastOrNull() ?: return
+        undoStack = (undoStack + settings).takeLast(100)
+        redoStack = redoStack.dropLast(1)
+        settings = next
+    }
+    var advancedStudio by remember { mutableStateOf(false) }
+    var selectedParametricBand by remember { mutableIntStateOf(-1) }
     val engine = remember { AudioDspEngine(48_000, 2, settings) }
     LaunchedEffect(bridgeState.config, bridgeState.status) {
         if (bridgeState.status == VexPlayerBridgeStatus.CONNECTED) {
@@ -134,6 +196,11 @@ private fun EqualizerScreen(bridgeClient: VexPlayerBridgeClient, bridgeState: Ve
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(selected = !advancedStudio, onClick = { advancedStudio = false }, label = { Text("Standard") })
+            FilterChip(selected = advancedStudio, onClick = { advancedStudio = true }, label = { Text("Advanced Studio") })
+        }
+        if (!advancedStudio) {
         Card(colors = CardDefaults.cardColors(containerColor = VexPanel)) {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -145,7 +212,7 @@ private fun EqualizerScreen(bridgeClient: VexPlayerBridgeClient, bridgeState: Ve
                             color = VexTextMuted
                         )
                     }
-                    Switch(checked = settings.enabled, onCheckedChange = { settings = settings.copy(enabled = it) })
+                    Switch(checked = settings.enabled, onCheckedChange = { commitSettings(settings.copy(enabled = it)) })
                 }
                 Text(
                     if (bridgeState.status == VexPlayerBridgeStatus.CONNECTED)
@@ -210,16 +277,16 @@ private fun EqualizerScreen(bridgeClient: VexPlayerBridgeClient, bridgeState: Ve
                 }
                 Text(
                     when (settings.performanceMode) {
-                        DspPerformanceMode.LOW -> "Low · 9 graphic filters · up to 2 parametric bands"
-                        DspPerformanceMode.MID -> "Mid · 16 graphic filters · up to 4 parametric bands"
-                        DspPerformanceMode.HIGH -> "High · 31 graphic filters · up to 8 parametric bands"
+                        DspPerformanceMode.LOW -> "Low · 9 graphic filters · up to 16 parametric bands"
+                        DspPerformanceMode.MID -> "Mid · 16 graphic filters · up to 16 parametric bands"
+                        DspPerformanceMode.HIGH -> "High · 31 graphic filters · up to 16 parametric bands"
                     },
                     color = VexTextMuted, style = MaterialTheme.typography.bodySmall
                 )
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     DspPerformanceMode.values().forEach { mode ->
                         Button(
-                            onClick = { settings = settings.copy(performanceMode = mode) },
+                            onClick = { commitSettings(settings.copy(performanceMode = mode)) },
                             modifier = Modifier.weight(1f),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = if (settings.performanceMode == mode) VexPurple else VexBackground
@@ -254,7 +321,7 @@ private fun EqualizerScreen(bridgeClient: VexPlayerBridgeClient, bridgeState: Ve
                                 Text("${preset.settings.performanceMode.name} · ${preset.settings.parametricBands.size} PEQ bands",
                                     color = VexTextMuted, style = MaterialTheme.typography.bodySmall)
                             }
-                            TextButton(onClick = { settings = preset.settings; presetMessage = "Loaded: ${preset.name}" }) {
+                            TextButton(onClick = { commitSettings(preset.settings); presetMessage = "Loaded: ${preset.name}" }) {
                                 Text("Load")
                             }
                             TextButton(onClick = {
@@ -272,35 +339,79 @@ private fun EqualizerScreen(bridgeClient: VexPlayerBridgeClient, bridgeState: Ve
         }
 
         DspSliderCard("Preamp", "%.1f dB".format(settings.preampDb), settings.preampDb, -12f, 6f) {
-            settings = settings.copy(preampDb = it)
+            commitSettings(settings.copy(preampDb = it))
         }
         DspSliderCard("Bass Boost", "${(settings.bassBoost * 100).toInt()}%", settings.bassBoost, 0f, 1f) {
-            settings = settings.copy(bassBoost = it)
+            commitSettings(settings.copy(bassBoost = it))
         }
         DspSliderCard("Stereo Width", "${(settings.stereoWidth * 100).toInt()}%", settings.stereoWidth, 0f, 1f) {
-            settings = settings.copy(stereoWidth = it)
+            commitSettings(settings.copy(stereoWidth = it))
         }
 
         Card(colors = CardDefaults.cardColors(containerColor = VexPanel)) {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                SettingSwitch("Automatic Headroom", settings.autoHeadroom) { settings = settings.copy(autoHeadroom = it) }
-                SettingSwitch("Output Limiter", settings.limiterEnabled) { settings = settings.copy(limiterEnabled = it) }
+                SettingSwitch("Automatic Headroom", settings.autoHeadroom) { commitSettings(settings.copy(autoHeadroom = it)) }
+                SettingSwitch("Output Limiter", settings.limiterEnabled) { commitSettings(settings.copy(limiterEnabled = it)) }
             }
         }
+
+        }
+
+        if (advancedStudio) {
+            Text("PARAMETRIC EQ WORKSPACE", color = VexPurple, style = MaterialTheme.typography.labelMedium)
+            Text("Touch or drag a node, then enter exact values below. Both controls edit the same live PEQ settings.", color = VexTextMuted, style = MaterialTheme.typography.bodySmall)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            OutlinedButton(onClick = { undoSettings() }, enabled = undoStack.isNotEmpty(), modifier = Modifier.weight(1f)) { Text("Undo") }
+            OutlinedButton(onClick = { redoSettings() }, enabled = redoStack.isNotEmpty(), modifier = Modifier.weight(1f)) { Text("Redo") }
+            OutlinedButton(onClick = { aSettings = settings; showingA = false }, modifier = Modifier.weight(1f)) { Text("Store A") }
+            OutlinedButton(onClick = { bSettings = settings; showingA = false }, modifier = Modifier.weight(1f)) { Text("Store B") }
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = {
+                val target = if (showingA) bSettings else aSettings
+                if (target != null) commitSettings(target)
+                showingA = !showingA
+            }, enabled = aSettings != null && bSettings != null, modifier = Modifier.weight(1f)) {
+                Text(if (showingA) "Switch to B" else "Switch to A")
+            }
+            OutlinedButton(onClick = { commitSettings(settings.copy(parametricBands = emptyList())) },
+                modifier = Modifier.weight(1f)) { Text("Clear PEQ") }
+        }
+        Text(
+            when {
+                aSettings == null || bSettings == null -> "A/B: Store both snapshots to compare settings."
+                showingA -> "A/B preview: A snapshot is active"
+                else -> "A/B preview: B/current snapshot is active"
+            }, color = VexTextMuted, style = MaterialTheme.typography.labelSmall
+        )
+        EqResponseCurve(
+            graphicGainsDb = settings.graphicGainsDb,
+            parametricBands = settings.parametricBands,
+            selectedBandIndex = selectedParametricBand,
+            onSelectBand = { selectedParametricBand = it },
+            onBandChange = { index, changed ->
+                val updated = settings.parametricBands.toMutableList()
+                if (index in updated.indices) {
+                    updated[index] = changed
+                    commitSettings(settings.copy(parametricBands = updated))
+                }
+            }
+        )
 
         Card(colors = CardDefaults.cardColors(containerColor = VexPanel)) {
             Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text("Parametric EQ", style = MaterialTheme.typography.titleLarge)
-                        Text("${settings.parametricBands.size}/8 bands", color = VexTextMuted,
+                        Text("${settings.parametricBands.size}/16 bands", color = VexTextMuted,
                             style = MaterialTheme.typography.bodySmall)
                     }
                     Button(
                         onClick = {
-                            settings = settings.copy(
+                            commitSettings(settings.copy(
                                 parametricBands = settings.parametricBands + ParametricBand()
-                            )
+                            ))
+                            selectedParametricBand = settings.parametricBands.lastIndex
                         },
                         enabled = settings.parametricBands.size < AudioDspEngine.MAX_PARAMETRIC_BANDS
                     ) { Text("Add band") }
@@ -312,12 +423,20 @@ private fun EqualizerScreen(bridgeClient: VexPlayerBridgeClient, bridgeState: Ve
                         onChange = { changed ->
                             val updated = settings.parametricBands.toMutableList()
                             updated[index] = changed
-                            settings = settings.copy(parametricBands = updated)
+                            commitSettings(settings.copy(parametricBands = updated))
                         },
                         onRemove = {
-                            settings = settings.copy(
+                            commitSettings(settings.copy(
                                 parametricBands = settings.parametricBands.filterIndexed { i, _ -> i != index }
-                            )
+                            ))
+                        },
+                        onDuplicate = {
+                            if (settings.parametricBands.size < AudioDspEngine.MAX_PARAMETRIC_BANDS) {
+                                val duplicate = band.copy(frequencyHz = (band.frequencyHz * 1.15f).coerceAtMost(20_000f))
+                                val updated = settings.parametricBands.toMutableList().apply { add(index + 1, duplicate) }
+                                commitSettings(settings.copy(parametricBands = updated))
+                                selectedParametricBand = index + 1
+                            }
                         }
                     )
                 }
@@ -342,17 +461,23 @@ private fun EqualizerScreen(bridgeClient: VexPlayerBridgeClient, bridgeState: Ve
                         Slider(value = value, onValueChange = { newValue ->
                             val updated = settings.graphicGainsDb.toMutableList()
                             updated[index] = newValue
-                            settings = settings.copy(graphicGainsDb = updated)
+                            commitSettings(settings.copy(graphicGainsDb = updated))
                         }, valueRange = -12f..12f)
                     }
                 }
-                Button(onClick = { settings = settings.copy(graphicGainsDb = List(31) { 0f }) },
+                Button(onClick = { commitSettings(settings.copy(graphicGainsDb = List(31) { 0f })) },
                     modifier = Modifier.fillMaxWidth()) { Text("Reset all bands") }
             }
         }
 
-        Text("These controls configure VEX EQ's PCM DSP core. They do not yet modify system audio or VEXPlayer playback; that requires playback-host integration and device compatibility checks.",
-            color = VexTextMuted, style = MaterialTheme.typography.bodySmall)
+        Text(
+            if (bridgeState.status == VexPlayerBridgeStatus.CONNECTED)
+                "Live control active: changes are sent to VEXPlayer, which remains the sole playback DSP owner."
+            else
+                "Standalone mode edits a local DSP profile only. Connect VEXPlayer to control its playback EQ; VEX EQ does not process system-wide audio.",
+            color = VexTextMuted, style = MaterialTheme.typography.bodySmall
+        )
+        }
         Spacer(Modifier.height(20.dp))
     }
     if (showSaveDialog) {
@@ -391,19 +516,65 @@ private fun ParametricBandCard(
     index: Int,
     band: ParametricBand,
     onChange: (ParametricBand) -> Unit,
-    onRemove: () -> Unit
+    onRemove: () -> Unit,
+    onDuplicate: () -> Unit = {}
 ) {
     val minLog = ln(20f)
     val maxLog = ln(20_000f)
     val normalizedFrequency = ((ln(band.frequencyHz.coerceIn(20f, 20_000f)) - minLog) /
         (maxLog - minLog)).coerceIn(0f, 1f)
+    var frequencyText by remember(index) { mutableStateOf(band.frequencyHz.toInt().toString()) }
+    var gainText by remember(index) { mutableStateOf("%.1f".format(java.util.Locale.US, band.gainDb)) }
+    var qText by remember(index) { mutableStateOf("%.2f".format(java.util.Locale.US, band.q)) }
+    LaunchedEffect(band.frequencyHz) { frequencyText = band.frequencyHz.toInt().toString() }
+    LaunchedEffect(band.gainDb) { gainText = "%.1f".format(java.util.Locale.US, band.gainDb) }
+    LaunchedEffect(band.q) { qText = "%.2f".format(java.util.Locale.US, band.q) }
     Card(colors = CardDefaults.cardColors(containerColor = VexBackground)) {
-        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("Band ${index + 1}", modifier = Modifier.weight(1f),
+                Text("Band ${index + 1} · Bell", modifier = Modifier.weight(1f),
                     style = MaterialTheme.typography.titleSmall)
+                TextButton(onClick = onDuplicate) { Text("Copy") }
                 TextButton(onClick = onRemove) { Text("Remove") }
             }
+            Text("MANUAL VALUES", color = VexTextMuted, style = MaterialTheme.typography.labelSmall)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                OutlinedTextField(
+                    value = frequencyText,
+                    onValueChange = { frequencyText = it.filter { ch -> ch.isDigit() }.take(5) },
+                    modifier = Modifier.weight(1.2f),
+                    label = { Text("Hz") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                )
+                OutlinedTextField(
+                    value = gainText,
+                    onValueChange = { gainText = it.filter { ch -> ch.isDigit() || ch == '-' || ch == '.' }.take(6) },
+                    modifier = Modifier.weight(1f),
+                    label = { Text("Gain dB") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+                )
+                OutlinedTextField(
+                    value = qText,
+                    onValueChange = { qText = it.filter { ch -> ch.isDigit() || ch == '.' }.take(5) },
+                    modifier = Modifier.weight(0.9f),
+                    label = { Text("Q") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+                )
+            }
+            OutlinedButton(
+                onClick = {
+                    val frequency = frequencyText.toFloatOrNull()
+                    val gain = gainText.toFloatOrNull()
+                    val q = qText.toFloatOrNull()
+                    if (frequency != null && gain != null && q != null &&
+                        frequency in 20f..20_000f && gain in -12f..12f && q in 0.3f..10f
+                    ) onChange(band.copy(frequencyHz = frequency, gainDb = gain, q = q))
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("Apply exact values") }
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text("Frequency", modifier = Modifier.weight(1f), color = VexTextMuted)
                 Text("${band.frequencyHz.toInt()} Hz", color = VexPurple)
@@ -419,7 +590,7 @@ private fun ParametricBandCard(
             Slider(value = band.gainDb, onValueChange = { onChange(band.copy(gainDb = it)) },
                 valueRange = -12f..12f)
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("Q", modifier = Modifier.weight(1f), color = VexTextMuted)
+                Text("Q Factor", modifier = Modifier.weight(1f), color = VexTextMuted)
                 Text("%.2f".format(band.q), color = VexPurple)
             }
             Slider(value = band.q, onValueChange = { onChange(band.copy(q = it)) },

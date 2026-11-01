@@ -16,6 +16,18 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
+data class BridgeSpectrumFrame(
+    val magnitudes: FloatArray = FloatArray(0),
+    val peaks: FloatArray = FloatArray(0),
+    val waveform: FloatArray = FloatArray(0),
+    val bass: Float = 0f,
+    val mid: Float = 0f,
+    val treble: Float = 0f,
+    val beatPulse: Float = 0f,
+    val rms: Float = 0f,
+    val timestampNanos: Long = 0L
+)
+
 enum class VexPlayerBridgeStatus { DISCONNECTED, CONNECTING, READY, CONNECTED, ERROR }
 
 data class VexPlayerBridgeState(
@@ -36,6 +48,11 @@ class VexPlayerBridgeClient(context: Context) {
 
     private var serviceMessenger: Messenger? = null
     private var isBound = false
+    private var spectrumSubscribed = false
+    private val mutableSpectrumFrame = MutableStateFlow(BridgeSpectrumFrame())
+    val spectrumFrame: StateFlow<BridgeSpectrumFrame> = mutableSpectrumFrame.asStateFlow()
+    private val mutableSpectrumError = MutableStateFlow<String?>(null)
+    val spectrumError: StateFlow<String?> = mutableSpectrumError.asStateFlow()
 
     private val incoming = Messenger(object : Handler(Looper.getMainLooper()) {
         override fun handleMessage(message: Message) {
@@ -58,6 +75,9 @@ class VexPlayerBridgeClient(context: Context) {
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
+            spectrumSubscribed = false
+            mutableSpectrumFrame.value = BridgeSpectrumFrame()
+            mutableSpectrumError.value = null
             serviceMessenger = null
             mutableState.value = mutableState.value.copy(
                 status = VexPlayerBridgeStatus.DISCONNECTED,
@@ -66,6 +86,9 @@ class VexPlayerBridgeClient(context: Context) {
         }
 
         override fun onBindingDied(name: ComponentName?) {
+            spectrumSubscribed = false
+            mutableSpectrumFrame.value = BridgeSpectrumFrame()
+            mutableSpectrumError.value = null
             serviceMessenger = null
             mutableState.value = mutableState.value.copy(
                 status = VexPlayerBridgeStatus.ERROR,
@@ -74,6 +97,9 @@ class VexPlayerBridgeClient(context: Context) {
         }
 
         override fun onNullBinding(name: ComponentName?) {
+            spectrumSubscribed = false
+            mutableSpectrumFrame.value = BridgeSpectrumFrame()
+            mutableSpectrumError.value = null
             serviceMessenger = null
             mutableState.value = mutableState.value.copy(
                 status = VexPlayerBridgeStatus.ERROR,
@@ -102,6 +128,21 @@ class VexPlayerBridgeClient(context: Context) {
         } catch (error: RuntimeException) {
             fail(error.message ?: "Could not connect to VEXPlayer.")
         }
+    }
+
+    fun subscribeSpectrum() {
+        if (spectrumSubscribed) return
+        if (mutableState.value.status !in setOf(VexPlayerBridgeStatus.READY, VexPlayerBridgeStatus.CONNECTED)) return
+        spectrumSubscribed = true
+        send(MSG_SUBSCRIBE_SPECTRUM)
+    }
+
+    fun unsubscribeSpectrum() {
+        if (!spectrumSubscribed) return
+        send(MSG_UNSUBSCRIBE_SPECTRUM)
+        spectrumSubscribed = false
+        mutableSpectrumFrame.value = BridgeSpectrumFrame()
+        mutableSpectrumError.value = null
     }
 
     fun acquireControl() {
@@ -170,6 +211,10 @@ class VexPlayerBridgeClient(context: Context) {
             MSG_CURRENT_STATE -> acceptHostState(message.data, VexPlayerBridgeStatus.READY)
             MSG_CONTROL_ACQUIRED -> acceptHostState(message.data, VexPlayerBridgeStatus.CONNECTED)
             MSG_HOST_STATE -> acceptHostState(message.data, VexPlayerBridgeStatus.CONNECTED)
+            MSG_SPECTRUM_FRAME -> acceptSpectrumFrame(message.data)
+            MSG_SPECTRUM_ERROR -> mutableSpectrumError.value = message.data.getString(KEY_ERROR)
+                ?: "VEXPlayer spectrum capture is unavailable."
+            MSG_SPECTRUM_READY -> Unit
             MSG_RESULT -> {
                 val data = message.data
                 val revision = data.getLong(KEY_HOST_REVISION, mutableState.value.hostRevision)
@@ -186,6 +231,27 @@ class VexPlayerBridgeClient(context: Context) {
                 }
             }
         }
+    }
+
+    private fun acceptSpectrumFrame(data: Bundle) {
+        mutableSpectrumError.value = null
+        val magnitudes = data.getFloatArray(KEY_SPECTRUM_MAGNITUDES)?.take(SPECTRUM_BANDS)
+            ?.map { if (it.isFinite()) it.coerceIn(0f, 1f) else 0f }?.toFloatArray() ?: FloatArray(0)
+        val peaks = data.getFloatArray(KEY_SPECTRUM_PEAKS)?.take(SPECTRUM_BANDS)
+            ?.map { if (it.isFinite()) it.coerceIn(0f, 1f) else 0f }?.toFloatArray() ?: FloatArray(0)
+        val waveform = data.getFloatArray(KEY_SPECTRUM_WAVEFORM)?.take(SPECTRUM_WAVE_POINTS)
+            ?.map { if (it.isFinite()) it.coerceIn(-1f, 1f) else 0f }?.toFloatArray() ?: FloatArray(0)
+        mutableSpectrumFrame.value = BridgeSpectrumFrame(
+            magnitudes = magnitudes,
+            peaks = peaks,
+            waveform = waveform,
+            bass = data.getFloat(KEY_SPECTRUM_BASS).coerceIn(0f, 1f),
+            mid = data.getFloat(KEY_SPECTRUM_MID).coerceIn(0f, 1f),
+            treble = data.getFloat(KEY_SPECTRUM_TREBLE).coerceIn(0f, 1f),
+            beatPulse = data.getFloat(KEY_SPECTRUM_BEAT).coerceIn(0f, 1f),
+            rms = data.getFloat(KEY_SPECTRUM_RMS).coerceIn(0f, 1f),
+            timestampNanos = data.getLong(KEY_SPECTRUM_TIMESTAMP)
+        )
     }
 
     private fun acceptHostState(data: Bundle, status: VexPlayerBridgeStatus) {
@@ -235,6 +301,7 @@ class VexPlayerBridgeClient(context: Context) {
     }
 
     fun close() {
+        unsubscribeSpectrum()
         if (mutableState.value.status == VexPlayerBridgeStatus.CONNECTED) {
             send(MSG_RELEASE_CONTROL)
         }
@@ -255,11 +322,16 @@ class VexPlayerBridgeClient(context: Context) {
         private const val MSG_ACQUIRE_CONTROL = 3
         private const val MSG_RELEASE_CONTROL = 4
         private const val MSG_APPLY_CONFIG = 5
+        private const val MSG_SUBSCRIBE_SPECTRUM = 6
+        private const val MSG_UNSUBSCRIBE_SPECTRUM = 7
         private const val MSG_PROTOCOL_INFO = 101
         private const val MSG_CURRENT_STATE = 102
         private const val MSG_CONTROL_ACQUIRED = 103
         private const val MSG_HOST_STATE = 104
         private const val MSG_RESULT = 105
+        private const val MSG_SPECTRUM_READY = 106
+        private const val MSG_SPECTRUM_FRAME = 107
+        private const val MSG_SPECTRUM_ERROR = 108
 
         private const val KEY_PROTOCOL_VERSION = "protocolVersion"
         private const val KEY_HOST_REVISION = "hostRevision"
@@ -277,5 +349,16 @@ class VexPlayerBridgeClient(context: Context) {
         private const val KEY_FREQUENCY = "frequencyHz"
         private const val KEY_GAIN = "gainMb"
         private const val KEY_Q = "q"
+        private const val KEY_SPECTRUM_MAGNITUDES = "spectrumMagnitudes"
+        private const val KEY_SPECTRUM_PEAKS = "spectrumPeaks"
+        private const val KEY_SPECTRUM_WAVEFORM = "spectrumWaveform"
+        private const val KEY_SPECTRUM_BASS = "spectrumBass"
+        private const val KEY_SPECTRUM_MID = "spectrumMid"
+        private const val KEY_SPECTRUM_TREBLE = "spectrumTreble"
+        private const val KEY_SPECTRUM_BEAT = "spectrumBeat"
+        private const val KEY_SPECTRUM_RMS = "spectrumRms"
+        private const val KEY_SPECTRUM_TIMESTAMP = "spectrumTimestamp"
+        private const val SPECTRUM_BANDS = 64
+        private const val SPECTRUM_WAVE_POINTS = 160
     }
 }

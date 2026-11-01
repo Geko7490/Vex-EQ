@@ -29,7 +29,7 @@ data class VexPlayerBridgeConfig(
             bassStrength in 0..1_000 &&
             stereoWidth in 0..1_000 &&
             preampMb in -1_200..600 &&
-            parametricBands.size <= 8 &&
+            parametricBands.size <= 16 &&
             parametricBands.all {
                 it.frequencyHz in 20..22_000 && it.gainMb in -1_200..1_200 &&
                     it.q.isFinite() && it.q in 0.3f..10f
