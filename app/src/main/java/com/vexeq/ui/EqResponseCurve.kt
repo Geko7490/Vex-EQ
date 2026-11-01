@@ -307,27 +307,22 @@ private fun nearestBand(
     height: Float
 ): Int {
     if (bands.isEmpty()) return -1
-    return bands.indices.minByOrNull { index ->
+    val plotWidth = (width - 2f).coerceAtLeast(1f)
+    val plotHeight = (height - 8f).coerceAtLeast(1f)
+    val nearest = bands.indices.minByOrNull { index ->
         val band = bands[index]
-        val plotWidth = (width - 2f).coerceAtLeast(1f)
-        val plotHeight = (height - 8f).coerceAtLeast(1f)
         val bandX = 1f + (ln(band.frequencyHz.coerceIn(20f, 20_000f).toDouble() / 20.0) /
             ln(20_000.0 / 20.0) * plotWidth).toFloat()
         val bandY = 4f + ((12f - band.gainDb.coerceIn(-12f, 12f)) / 24f) * plotHeight
         val dx = (x - bandX).toDouble()
         val dy = (y - bandY).toDouble()
         dx * dx + dy * dy
-    }?.takeIf { it <= 26.0 * 26.0 }?.let {
-        bands.indices.minByOrNull { index ->
-            val band = bands[index]
-            val plotWidth = (width - 2f).coerceAtLeast(1f)
-            val plotHeight = (height - 8f).coerceAtLeast(1f)
-            val bandX = 1f + (ln(band.frequencyHz.coerceIn(20f, 20_000f).toDouble() / 20.0) /
-                ln(20_000.0 / 20.0) * plotWidth).toFloat()
-            val bandY = 4f + ((12f - band.gainDb.coerceIn(-12f, 12f)) / 24f) * plotHeight
-            val dx = (x - bandX).toDouble()
-            val dy = (y - bandY).toDouble()
-            dx * dx + dy * dy
-        } ?: -1
-    } ?: -1
+    } ?: return -1
+    val band = bands[nearest]
+    val bandX = 1f + (ln(band.frequencyHz.coerceIn(20f, 20_000f).toDouble() / 20.0) /
+        ln(20_000.0 / 20.0) * plotWidth).toFloat()
+    val bandY = 4f + ((12f - band.gainDb.coerceIn(-12f, 12f)) / 24f) * plotHeight
+    val dx = x - bandX
+    val dy = y - bandY
+    return if (dx * dx + dy * dy <= 26f * 26f) nearest else -1
 }
