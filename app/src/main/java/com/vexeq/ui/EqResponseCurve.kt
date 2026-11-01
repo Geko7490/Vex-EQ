@@ -70,7 +70,7 @@ fun EqResponseCurve(
                 Text("ESTIMATED · 20 Hz – 20 kHz", style = MaterialTheme.typography.labelSmall, color = GraphMuted)
             }
             Canvas(
-                modifier = Modifier.fillMaxWidth().height(164.dp).padding(top = 8.dp, bottom = 4.dp)
+                modifier = Modifier.fillMaxWidth().height(164.dp)
                     .background(Color(0xFF101014))
                     .pointerInput(Unit) {
                         detectTapGestures { offset ->
@@ -82,8 +82,7 @@ fun EqResponseCurve(
                         var dragIndex = -1
                         detectDragGestures(
                             onDragStart = { offset ->
-                                dragIndex = if (latestSelectedBand in latestBands.indices) latestSelectedBand
-                                else nearestBand(latestBands, offset.x, offset.y, size.width.toFloat(), size.height.toFloat())
+                                dragIndex = nearestBand(latestBands, offset.x, offset.y, size.width.toFloat(), size.height.toFloat())
                                 if (dragIndex >= 0) latestOnSelectBand(dragIndex)
                             },
                             onDragEnd = { dragIndex = -1 },
