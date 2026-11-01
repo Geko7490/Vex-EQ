@@ -229,7 +229,7 @@ class VexPlayerBridgeClient(context: Context) {
         val magnitudes = data.getFloatArray(KEY_SPECTRUM_MAGNITUDES)?.take(SPECTRUM_BANDS)
             ?.map { if (it.isFinite()) it.coerceIn(0f, 1f) else 0f }?.toFloatArray() ?: FloatArray(0)
         val peaks = data.getFloatArray(KEY_SPECTRUM_PEAKS)?.take(SPECTRUM_BANDS)
-            ?.map { if (it.isFinite()) it.coerceIn(0f, 1f) else 0f }?.toFloatArray().orEmptyFloatArray()
+            ?.map { if (it.isFinite()) it.coerceIn(0f, 1f) else 0f }?.toFloatArray() ?: FloatArray(0)
         val waveform = data.getFloatArray(KEY_SPECTRUM_WAVEFORM)?.take(SPECTRUM_WAVE_POINTS)
             ?.map { if (it.isFinite()) it.coerceIn(-1f, 1f) else 0f }?.toFloatArray() ?: FloatArray(0)
         mutableSpectrumFrame.value = BridgeSpectrumFrame(
