@@ -65,4 +65,14 @@ class AudioDspEngineTest {
         assertTrue(engine.process(pcm, pcm, 2))
         assertTrue(pcm.all { it.isFinite() })
     }
+
+    @Test fun performanceModesLimitParametricBandCount() {
+        val bands = List(8) { ParametricBand(frequencyHz = 100f + it * 100f, gainDb = 2f) }
+        assertEquals(2, DspSettings(parametricBands = bands, performanceMode = DspPerformanceMode.LOW)
+            .sanitized().parametricBands.size)
+        assertEquals(4, DspSettings(parametricBands = bands, performanceMode = DspPerformanceMode.MID)
+            .sanitized().parametricBands.size)
+        assertEquals(8, DspSettings(parametricBands = bands, performanceMode = DspPerformanceMode.HIGH)
+            .sanitized().parametricBands.size)
+    }
 }
