@@ -176,6 +176,27 @@ internal object EqCurveMath {
         }
     }
 
+    private fun bandResponseDb(frequency: Double, centerHz: Double, gainDb: Double, q: Double): Double {
+        if (kotlin.math.abs(gainDb) < 0.0001 || centerHz >= SAMPLE_RATE * 0.48) return 0.0
+        val a = 10.0.pow(gainDb / 40.0)
+        val omega = 2.0 * PI * centerHz / SAMPLE_RATE
+        val alpha = sin(omega) / (2.0 * q)
+        val c = cos(omega)
+        val a0 = 1.0 + alpha / a
+        val coeff = CurveCoefficients(
+            (1.0 + alpha * a) / a0, (-2.0 * c) / a0, (1.0 - alpha * a) / a0,
+            (-2.0 * c) / a0, (1.0 - alpha / a) / a0
+        )
+        val w = 2.0 * PI * frequency / SAMPLE_RATE
+        val c1 = cos(w); val s1 = sin(w); val c2 = cos(2.0 * w); val s2 = sin(2.0 * w)
+        val nr = coeff.b0 + coeff.b1 * c1 + coeff.b2 * c2
+        val ni = -coeff.b1 * s1 - coeff.b2 * s2
+        val dr = 1.0 + coeff.a1 * c1 + coeff.a2 * c2
+        val di = -coeff.a1 * s1 - coeff.a2 * s2
+        return 20.0 * log10((sqrt(nr * nr + ni * ni) /
+            sqrt(dr * dr + di * di).coerceAtLeast(1e-12)).coerceAtLeast(1e-12))
+    }
+
     private data class CurveCoefficients(val b0: Double, val b1: Double, val b2: Double, val a1: Double, val a2: Double)
 
     private fun parametricResponseDb(frequency: Double, band: ParametricBand): Double {
@@ -246,7 +267,7 @@ internal object EqCurveMath {
         return 20.0 * log10((sqrt(nr * nr + ni * ni) /
             sqrt(dr * dr + di * di).coerceAtLeast(1e-12)).coerceAtLeast(1e-12))
     }
-}}
+}
 
 internal fun frequencyAt(x: Float, width: Float): Float {
     val fraction = (x / width.coerceAtLeast(1f)).coerceIn(0f, 1f)
