@@ -212,7 +212,7 @@ private fun EqualizerScreen(bridgeClient: VexPlayerBridgeClient, bridgeState: Ve
                             color = VexTextMuted
                         )
                     }
-                    Switch(checked = settings.enabled, onCheckedChange = { settings = settings.copy(enabled = it) })
+                    Switch(checked = settings.enabled, onCheckedChange = { commitSettings(settings.copy(enabled = it)) })
                 }
                 Text(
                     if (bridgeState.status == VexPlayerBridgeStatus.CONNECTED)
@@ -286,7 +286,7 @@ private fun EqualizerScreen(bridgeClient: VexPlayerBridgeClient, bridgeState: Ve
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     DspPerformanceMode.values().forEach { mode ->
                         Button(
-                            onClick = { settings = settings.copy(performanceMode = mode) },
+                            onClick = { commitSettings(settings.copy(performanceMode = mode)) },
                             modifier = Modifier.weight(1f),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = if (settings.performanceMode == mode) VexPurple else VexBackground
@@ -321,7 +321,7 @@ private fun EqualizerScreen(bridgeClient: VexPlayerBridgeClient, bridgeState: Ve
                                 Text("${preset.settings.performanceMode.name} · ${preset.settings.parametricBands.size} PEQ bands",
                                     color = VexTextMuted, style = MaterialTheme.typography.bodySmall)
                             }
-                            TextButton(onClick = { settings = preset.settings; presetMessage = "Loaded: ${preset.name}" }) {
+                            TextButton(onClick = { commitSettings(preset.settings); presetMessage = "Loaded: ${preset.name}" }) {
                                 Text("Load")
                             }
                             TextButton(onClick = {
@@ -339,19 +339,19 @@ private fun EqualizerScreen(bridgeClient: VexPlayerBridgeClient, bridgeState: Ve
         }
 
         DspSliderCard("Preamp", "%.1f dB".format(settings.preampDb), settings.preampDb, -12f, 6f) {
-            settings = settings.copy(preampDb = it)
+            commitSettings(settings.copy(preampDb = it))
         }
         DspSliderCard("Bass Boost", "${(settings.bassBoost * 100).toInt()}%", settings.bassBoost, 0f, 1f) {
-            settings = settings.copy(bassBoost = it)
+            commitSettings(settings.copy(bassBoost = it))
         }
         DspSliderCard("Stereo Width", "${(settings.stereoWidth * 100).toInt()}%", settings.stereoWidth, 0f, 1f) {
-            settings = settings.copy(stereoWidth = it)
+            commitSettings(settings.copy(stereoWidth = it))
         }
 
         Card(colors = CardDefaults.cardColors(containerColor = VexPanel)) {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                SettingSwitch("Automatic Headroom", settings.autoHeadroom) { settings = settings.copy(autoHeadroom = it) }
-                SettingSwitch("Output Limiter", settings.limiterEnabled) { settings = settings.copy(limiterEnabled = it) }
+                SettingSwitch("Automatic Headroom", settings.autoHeadroom) { commitSettings(settings.copy(autoHeadroom = it)) }
+                SettingSwitch("Output Limiter", settings.limiterEnabled) { commitSettings(settings.copy(limiterEnabled = it)) }
             }
         }
 
