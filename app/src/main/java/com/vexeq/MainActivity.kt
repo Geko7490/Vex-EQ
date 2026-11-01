@@ -3,6 +3,8 @@ package com.vexeq
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -71,6 +73,35 @@ private fun EqualizerScreen() {
     var showSaveDialog by remember { mutableStateOf(false) }
     var presetName by remember { mutableStateOf("") }
     var presetMessage by remember { mutableStateOf("") }
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        if (uri != null) {
+            val result = runCatching {
+                context.contentResolver.openOutputStream(uri)?.use {
+                    it.write(presetStore.exportJson().toByteArray(Charsets.UTF_8))
+                } ?: error("Cannot open destination")
+            }
+            presetMessage = if (result.isSuccess) "Presets exported" else "Export failed"
+        }
+    }
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            val result = runCatching {
+                val json = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                    ?: error("Cannot open preset file")
+                presetStore.importJson(json)
+            }
+            if (result.isSuccess) {
+                presets = presetStore.list()
+                presetMessage = "Imported ${result.getOrThrow()} preset(s)"
+            } else {
+                presetMessage = result.exceptionOrNull()?.message ?: "Import failed"
+            }
+        }
+    }
     var settings by remember { mutableStateOf(presetStore.loadLastSettings()) }
     val engine = remember { AudioDspEngine(48_000, 2, settings) }
     LaunchedEffect(settings) {
@@ -125,6 +156,13 @@ private fun EqualizerScreen() {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text("Presets", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
                     Button(onClick = { presetName = ""; showSaveDialog = true }) { Text("Save current") }
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = { exportLauncher.launch("vex-eq-presets.json") },
+                        modifier = Modifier.weight(1f)) { Text("Export") }
+                    OutlinedButton(onClick = {
+                        importLauncher.launch(arrayOf("application/json", "text/json", "text/plain"))
+                    }, modifier = Modifier.weight(1f)) { Text("Import") }
                 }
                 if (presets.isEmpty()) {
                     Text("No saved presets yet. Save your current EQ curve to reuse it later.",
