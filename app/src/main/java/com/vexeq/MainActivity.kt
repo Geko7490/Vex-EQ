@@ -255,8 +255,8 @@ private fun EqualizerScreen(bridgeClient: VexPlayerBridgeClient, bridgeState: Ve
                 }
                 Text(
                     when (settings.performanceMode) {
-                        DspPerformanceMode.LOW -> "Low · 9 graphic filters · up to 4 parametric bands"
-                        DspPerformanceMode.MID -> "Mid · 16 graphic filters · up to 8 parametric bands"
+                        DspPerformanceMode.LOW -> "Low · 9 graphic filters · up to 16 parametric bands"
+                        DspPerformanceMode.MID -> "Mid · 16 graphic filters · up to 16 parametric bands"
                         DspPerformanceMode.HIGH -> "High · 31 graphic filters · up to 16 parametric bands"
                     },
                     color = VexTextMuted, style = MaterialTheme.typography.bodySmall
