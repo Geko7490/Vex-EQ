@@ -19,6 +19,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -130,6 +131,21 @@ fun HomeDashboardScreen(
 fun StudioModulesScreen(bridgeClient: VexPlayerBridgeClient, bridgeState: VexPlayerBridgeState) {
     val config = bridgeState.config
     val connected = bridgeState.status == VexPlayerBridgeStatus.CONNECTED
+    var stereoWidthValue by remember(config?.stereoWidth) {
+        mutableFloatStateOf((config?.stereoWidth ?: 0) / 1000f)
+    }
+    var thresholdValue by remember(config?.compressorThresholdDb) {
+        mutableFloatStateOf(config?.compressorThresholdDb ?: -18f)
+    }
+    var ratioValue by remember(config?.compressorRatio) {
+        mutableFloatStateOf(config?.compressorRatio ?: 4f)
+    }
+    var attackValue by remember(config?.compressorAttackMs) {
+        mutableFloatStateOf(config?.compressorAttackMs ?: 10f)
+    }
+    var releaseValue by remember(config?.compressorReleaseMs) {
+        mutableFloatStateOf(config?.compressorReleaseMs ?: 120f)
+    }
     fun update(transform: (com.vexeq.bridge.VexPlayerBridgeConfig) -> com.vexeq.bridge.VexPlayerBridgeConfig) {
         config?.let { bridgeClient.apply(transform(it)) }
     }
@@ -139,11 +155,11 @@ fun StudioModulesScreen(bridgeClient: VexPlayerBridgeClient, bridgeState: VexPla
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("STEREO & PHASE", color = StudioPurple, style = MaterialTheme.typography.labelLarge)
                 Text("Stereo Width", style = MaterialTheme.typography.titleMedium)
-                val width = (config?.stereoWidth ?: 0) / 1000f
-                Text("${(width * 100).toInt()}%", color = StudioMuted)
-                Slider(value = width, onValueChange = { value ->
-                    update { it.copy(stereoWidth = (value * 1000).toInt()) }
-                }, enabled = connected, valueRange = 0f..1f)
+                Text("${(stereoWidthValue * 100).toInt()}%", color = StudioMuted)
+                Slider(value = stereoWidthValue, onValueChange = { stereoWidthValue = it },
+                    onValueChangeFinished = {
+                        update { it.copy(stereoWidth = (stereoWidthValue * 1000).toInt()) }
+                    }, enabled = connected, valueRange = 0f..1f)
                 Text("Width is applied by VEXPlayer's stereo mid/side stage. L/R balance and phase correlation remain unavailable until the host provides channel-separated analysis data.",
                     color = StudioMuted, style = MaterialTheme.typography.bodySmall)
             }
@@ -161,26 +177,22 @@ fun StudioModulesScreen(bridgeClient: VexPlayerBridgeClient, bridgeState: VexPla
                         onCheckedChange = { enabled -> update { it.copy(compressorEnabled = enabled) } },
                         enabled = connected && config != null)
                 }
-                val threshold = config?.compressorThresholdDb ?: -18f
-                Text("Threshold · %.1f dB".format(threshold), color = StudioMuted)
-                Slider(value = threshold, onValueChange = { value ->
-                    update { it.copy(compressorThresholdDb = value) }
-                }, enabled = connected && config != null, valueRange = -36f..0f)
-                val ratio = config?.compressorRatio ?: 4f
-                Text("Ratio · %.1f:1".format(ratio), color = StudioMuted)
-                Slider(value = ratio, onValueChange = { value ->
-                    update { it.copy(compressorRatio = value) }
-                }, enabled = connected && config != null, valueRange = 1f..20f)
-                val attack = config?.compressorAttackMs ?: 10f
-                Text("Attack · %.0f ms".format(attack), color = StudioMuted)
-                Slider(value = attack, onValueChange = { value ->
-                    update { it.copy(compressorAttackMs = value) }
-                }, enabled = connected && config != null, valueRange = 1f..100f)
-                val release = config?.compressorReleaseMs ?: 120f
-                Text("Release · %.0f ms".format(release), color = StudioMuted)
-                Slider(value = release, onValueChange = { value ->
-                    update { it.copy(compressorReleaseMs = value) }
-                }, enabled = connected && config != null, valueRange = 10f..1_000f)
+                Text("Threshold · %.1f dB".format(thresholdValue), color = StudioMuted)
+                Slider(value = thresholdValue, onValueChange = { thresholdValue = it },
+                    onValueChangeFinished = { update { it.copy(compressorThresholdDb = thresholdValue) } },
+                    enabled = connected && config != null, valueRange = -36f..0f)
+                Text("Ratio · %.1f:1".format(ratioValue), color = StudioMuted)
+                Slider(value = ratioValue, onValueChange = { ratioValue = it },
+                    onValueChangeFinished = { update { it.copy(compressorRatio = ratioValue) } },
+                    enabled = connected && config != null, valueRange = 1f..20f)
+                Text("Attack · %.0f ms".format(attackValue), color = StudioMuted)
+                Slider(value = attackValue, onValueChange = { attackValue = it },
+                    onValueChangeFinished = { update { it.copy(compressorAttackMs = attackValue) } },
+                    enabled = connected && config != null, valueRange = 1f..100f)
+                Text("Release · %.0f ms".format(releaseValue), color = StudioMuted)
+                Slider(value = releaseValue, onValueChange = { releaseValue = it },
+                    onValueChangeFinished = { update { it.copy(compressorReleaseMs = releaseValue) } },
+                    enabled = connected && config != null, valueRange = 10f..1_000f)
                 androidx.compose.material3.HorizontalDivider(color = Color(0xFF292831))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
