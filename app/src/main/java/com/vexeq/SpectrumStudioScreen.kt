@@ -1,5 +1,9 @@
 package com.vexeq
 
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -43,6 +47,8 @@ fun SpectrumStudioScreen(
     val spectrumError by bridgeClient.spectrumError.collectAsState()
     var showBars by remember { mutableStateOf(true) }
     var showWave by remember { mutableStateOf(true) }
+    var showRta by remember { mutableStateOf(true) }
+    var showPeakHold by remember { mutableStateOf(true) }
 
     LaunchedEffect(bridgeState.status) {
         if (bridgeState.status == VexPlayerBridgeStatus.READY ||
@@ -84,6 +90,8 @@ fun SpectrumStudioScreen(
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(selected = showBars, onClick = { showBars = !showBars }, label = { Text("FFT Bars") })
             FilterChip(selected = showWave, onClick = { showWave = !showWave }, label = { Text("FFT Wave") })
+            FilterChip(selected = showRta, onClick = { showRta = !showRta }, label = { Text("RTA") })
+            FilterChip(selected = showPeakHold, onClick = { showPeakHold = !showPeakHold }, label = { Text("Peak Hold") })
         }
 
         Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF101014))) {
@@ -110,6 +118,37 @@ fun SpectrumStudioScreen(
                             color = AnalyzerMuted
                         )
                     }
+                }
+            }
+        }
+
+        if (showRta && frame.magnitudes.isNotEmpty()) {
+            Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF101014))) {
+                Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("REAL-TIME ANALYZER", color = AnalyzerPurple, style = MaterialTheme.typography.labelLarge)
+                    Canvas(Modifier.fillMaxWidth().height(116.dp)) {
+                        val values = frame.magnitudes
+                        val peaks = frame.peaks
+                        val count = values.size.coerceAtLeast(1)
+                        val baseline = size.height - 2f
+                        for (line in 1..3) {
+                            val y = size.height * line / 4f
+                            drawLine(Color(0xFF302C38), Offset(0f, y), Offset(size.width, y), 1f)
+                        }
+                        val path = Path()
+                        values.forEachIndexed { index, value ->
+                            val x = size.width * index / (count - 1).coerceAtLeast(1)
+                            val y = baseline - value.coerceIn(0f, 1f) * (size.height - 6f)
+                            if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                            if (showPeakHold && index < peaks.size) {
+                                val peakY = baseline - peaks[index].coerceIn(0f, 1f) * (size.height - 6f)
+                                drawLine(Color(0xFFFFB86B), Offset(x, peakY), Offset(x, (peakY + 3f).coerceAtMost(baseline)), 1.5f)
+                            }
+                        }
+                        drawPath(path, AnalyzerPurple, style = Stroke(width = 2f))
+                    }
+                    Text("Live logarithmic FFT energy · peak decay supplied by VEXPlayer",
+                        color = AnalyzerMuted, style = MaterialTheme.typography.bodySmall)
                 }
             }
         }
