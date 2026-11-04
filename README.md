@@ -22,3 +22,15 @@ Android's AudioEffect APIs are primarily attached to an application's audio sess
 ## Development
 
 The Android project and CI workflow are being added on a feature branch. See the repository's Actions tab for build results once the workflow is present.
+
+## Working branch status
+
+Branch `vex-agent-1793776530292` currently contains only this README and
+`docs/BRIDGE-UPGRADE-PLAN.md`. The bridge source, the Android project and the CI
+workflow are **not** present on this branch, and the agent toolset cannot read
+`main`, other branches, or Actions artifacts.
+
+Because the working bridge source could not be inspected, no bridge code was
+modified. See [`docs/BRIDGE-UPGRADE-PLAN.md`](docs/BRIDGE-UPGRADE-PLAN.md) for the
+audit result, the backward-compatible upgrade strategy, and what is needed to
+proceed.
